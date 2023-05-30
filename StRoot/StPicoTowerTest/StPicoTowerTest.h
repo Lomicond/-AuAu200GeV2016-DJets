@@ -66,7 +66,7 @@ class StPicoTowerTest : public StMaker
 {
   public:
     StPicoTowerTest(char const * name, 
-        char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil);
+        char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil, int pYear);
     virtual ~StPicoTowerTest();
 
     virtual Int_t Init();
@@ -81,6 +81,7 @@ class StPicoTowerTest : public StMaker
     StEmcADCtoEMaker *mADCtoEMaker;
     StBemcTables     *mTables;
     private:
+    int mYear;
     StPicoTowerTest() {}
     void readNextEvent();
     ofstream fout;
@@ -88,7 +89,7 @@ class StPicoTowerTest : public StMaker
     //-------------------------------------------
 
     bool isGoodEvent();
-    bool isMBTrigger();
+    bool isMBTrigger(int mYear);
     bool isGoodTrack(StPicoTrack const*) const;
 
 

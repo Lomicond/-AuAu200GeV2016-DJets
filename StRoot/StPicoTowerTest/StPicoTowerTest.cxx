@@ -39,6 +39,7 @@
 #include "TFile.h"
 #include "StEvent/StDcaGeometry.h"
 //
+#include <set>
 #include <vector>
 #include <stdio.h>
 #include <time.h>
@@ -46,15 +47,15 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
-using namespace std;  //robotmon
+using namespace std; 
 
 //-------------------------------------
 
 ClassImp(StPicoTowerTest)
 
-  StPicoTowerTest::StPicoTowerTest(char const * name, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil): 
+  StPicoTowerTest::StPicoTowerTest(char const * name, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil,int pYear): 
     StMaker(name),mPicoDstMaker(picoDstMaker), mGRefMultCorrUtil(grefmultCorrUtil),
-    mOutFileName(outName),mOutputFile(NULL), mChain(NULL), mEventCounter(0){}
+    mOutFileName(outName),mOutputFile(NULL), mChain(NULL), mEventCounter(0),mYear(pYear){}
 
 Int_t StPicoTowerTest::Init()
 {
@@ -123,6 +124,7 @@ Int_t StPicoTowerTest::Finish()
 //-----------------------------------------------------------------------------
 Int_t StPicoTowerTest::Make()
 {
+
   //readNextEvent();
   if (!mPicoDstMaker)
   {
@@ -138,18 +140,16 @@ Int_t StPicoTowerTest::Make()
     return kStWarn;
   }
 
-
+  //cout << "rok: " << mYear << endl;
 
   StThreeVectorF pVtx(-999.,-999.,-999.);
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
 
-  
   if(!(isGoodEvent()))//minBias trigger requires
   {
     return kStOK;
   }
   
-
   if(!mGRefMultCorrUtil) {
     LOG_WARN << " No mGRefMultCorrUtil! Skip! " << endl;
     return kStWarn;
@@ -157,10 +157,12 @@ Int_t StPicoTowerTest::Make()
 
   mGRefMultCorrUtil->init(picoDst->event()->runId());
   mGRefMultCorrUtil->initEvent(picoDst->event()->grefMult(),pVtx.z(),picoDst->event()->ZDCx()) ;
+
   int centrality  = mGRefMultCorrUtil->getCentralityBin9();
+
   if(centrality<0) {
-    LOG_WARN << "not minBias sample!" << endl;
-    return kStWarn;
+    //LOG_WARN << "not minBias sample!" << endl;
+    return kStOK;
   }
 
   pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
@@ -204,7 +206,6 @@ Int_t StPicoTowerTest::Make()
   
       }
 
-  
   return kStOK;
 }
 //-----------------------------------------------------------------------------
@@ -228,56 +229,42 @@ bool StPicoTowerTest::isGoodEvent()
 {
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
   // return (event->triggerWord() & mycuts::triggerWord) &&
-  return (isMBTrigger() &&
+  //cout << "Test: " << isMBTrigger(mYear) << endl;
+  return (isMBTrigger(mYear) &&
       sqrt(event->primaryVertex().x()*event->primaryVertex().x()+event->primaryVertex().y()*event->primaryVertex().y()) < mycuts::vz &&
       fabs(event->primaryVertex().z()) < mycuts::vz &&
       fabs(event->primaryVertex().z() - event->vzVpd()) < mycuts::vzVpdVz);
   //  return event->triggerWord() & mycuts::triggerWord;
 }
-bool StPicoTowerTest::isMBTrigger()
+bool StPicoTowerTest::isMBTrigger(int mYear)
 {
-  StPicoEvent *event = (StPicoEvent *)picoDst->event();
-  return (event->isTrigger(520001) ||// VPDMB-5-p-sst (production 1, physics stream)||
-      event->isTrigger(520011)|| // VPDMB-5-p-sst
-      event->isTrigger(520021)|| // VPDMB-5-p-sst
-      event->isTrigger(520031)|| // VPDMB-5-p-sst
-      event->isTrigger(520041)|| // VPDMB-5-p-sst
-      event->isTrigger(520051)|| // VPDMB-5-p-sst
-      event->isTrigger(570002)|| // VPDMB-5-nosst (production 2, nosst stream)
-      event->isTrigger(570001)||  // VPDMB-5-sst (production 2, sst stream )
-      event->isTrigger(520201)|| //BHT1*VPDMB-10
-      event->isTrigger(520211)|| //BHT1*VPDMB-10
-      event->isTrigger(520221)|| //BHT1*VPDMB-10
-      event->isTrigger(520231)|| //BHT1*VPDMB-10
-      event->isTrigger(520241)|| //BHT1*VPDMB-10
-      event->isTrigger(520251)|| //BHT1*VPDMB-10
-      event->isTrigger(520261)|| //BHT1*VPDMB-10
-      event->isTrigger(520203)|| //BHT
-      event->isTrigger(520101)|| //central-5
-      event->isTrigger(520111)|| //central-5
-      event->isTrigger(520121)|| //central-5
-      event->isTrigger(520131)|| //central-5
-      event->isTrigger(520141)|| //central-5
-      event->isTrigger(520007)|| //vpdmb-10
-      event->isTrigger(520017)|| //vpdmb-10
-      event->isTrigger(520027)|| //vpdmb-10
-      event->isTrigger(520037)|| //vpdmb-10
-      event->isTrigger(520003)|| //VPDMB-5
-      event->isTrigger(520013)|| //VPDMB-5
-      event->isTrigger(520023)|| //VPDMB-5
-      event->isTrigger(520033)|| //VPDMB-5
-      event->isTrigger(520043)|| //VPDMB-5
-      event->isTrigger(520802)|| //VPDMB-5-p-hlt
-      event->isTrigger(520812)|| //VPDMB-5-p-hlt
-      event->isTrigger(520822)|| //VPDMB-5-p-hlt
-      event->isTrigger(520832)|| //VPDMB-5-p-hlt
-      event->isTrigger(520842)|| //VPDMB-5-p-hlt
-      event->isTrigger(520002)|| //VPDMB-5-p-nosst
-      event->isTrigger(520012)|| //VPDMB-5-p-nosst
-      event->isTrigger(520022)|| //VPDMB-5-p-nosst
-      event->isTrigger(520032)|| //VPDMB-5-p-nosst
-      event->isTrigger(520042)); //VPDMB-5-p-nosst            
-      
+
+  const std::set<int>* mbTriggers = nullptr;
+
+  if(mYear ==2016){
+      static const std::set<int> mbTriggers2016 = {
+        520001, 520011, 520021, 520031, 520041, 520051,           // VPDMB-5-p-sst
+        570002, 570001,                                           // VPDMB-5-nosst  (production 2, nosst stream), VPDMB-5-sst (production 2, sst stream )
+        520201, 520211, 520221, 520231, 520241, 520251, 520261,   // BHT1*VPDMB-10
+        520203,                                                   // BHT
+        520101, 520111, 520121, 520131, 520141,                   // central-5  
+        520007, 520017, 520027, 520037,                           // vpdmb-10
+        520003, 520013, 520023, 520033, 520043,                   // VPDMB-5
+        520802, 520812, 520822, 520832, 520842,                   // VPDMB-5-p-hlt
+        520002, 520012, 520022, 520032, 520042                    // VPDMB-5-p-nosst
+      };
+      mbTriggers = &mbTriggers2016;
+  }
+
+  if(mYear ==2014){  
+      static const std::set<int> mbTriggers2014 = {
+      450050, 450060, 450005, 450015, 450025
+      };
+      mbTriggers = &mbTriggers2014;
+  }
+
+    StPicoEvent* event = static_cast<StPicoEvent*>(picoDst->event());
+  return std::any_of(mbTriggers->begin(), mbTriggers->end(), [&](int trigger) { return event->isTrigger(trigger); });
 }
 //-----------------------------------------------------------------------------
 bool StPicoTowerTest::isGoodTrack(StPicoTrack const * const trk) const
