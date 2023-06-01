@@ -1,14 +1,3 @@
-/* **************************************************
- *  A macro to run StPicoD0EventMaker
- *
- *  Authors:  **Mustafa Mustafa (mmustafa@lbl.gov)
- *
- *  **Code Maintainer
- *
- * **************************************************
- */
-
-
 #include <TSystem>
 
 class StMaker;
@@ -19,7 +8,7 @@ class StPicoDstMaker;
 StChain *chain;
 //void runPicoD0EventMaker(const Char_t *inputFile="root://xrdstar.rcf.bnl.gov:1095//home/starlib/home/starreco/reco/AuAu_200_production_low_2014/ReversedFullField/P16id.SL22c/2014/095/15095020/st_physics_15095020_raw_1000015.picoDst.root", const Char_t *outputFile="test.root")
 void RunPicoD0EventMaker_short(TString pico="TestLists/testPico_2016.list",
- TString outFileName="Test_EventMaker.root", TString badRunListFileName = "picoList_bad_MB.list",  int pYear = 2014)
+ TString outFileName="Test_EventMaker.root", int pYear = 2016)
 
 { 
  
@@ -33,12 +22,17 @@ void RunPicoD0EventMaker_short(TString pico="TestLists/testPico_2016.list",
       Runcode = "Run16_AuAu200_VpdMB5";
       prodID = "P16ij";
       pico = "TestLists/testPico_2016.list";
+
    } else if (pYear==2014){
       SL_version = "SL22c";
       Runcode = "Run14_AuAu200_VpdMB5";
       prodID = "P16id";
       pico = "TestLists/testPico_2014.list";
-   } 
+   }else {
+      cout << "\033[0;31m Not valid year.\033[0m"
+      exit(0);
+   }
+   outFileName=Form("Test_EventMaker_%.d",pYear);
 
   string env_SL = getenv ("STAR");
   if(env_SL.find(SL_version)==string::npos)
@@ -66,9 +60,7 @@ void RunPicoD0EventMaker_short(TString pico="TestLists/testPico_2016.list",
 	int total = picoDstMaker->chain()->GetEntries();
   cout << " Total entries = " << total << endl;
   
-  //if(nEvents>total) 
-  nEvents = total;
-  cout << nEvents<< endl;
+
 	nEvents = 200;
 	for (Int_t i=0; i<= nEvents; i++)
   {
