@@ -14,7 +14,7 @@
 
 #include "Rtypes.h"
 #include <string>
-
+#include <set>
 namespace mycuts
 {
    extern std::string const prescalesFilesDirectoryName;
@@ -62,5 +62,8 @@ namespace mycuts
    extern float const DCA_D0_cut[6][5];
    extern float const D0_decayLength_cut[6][5];
    extern float const pionkaonDCA_cut[6][5];
+
+   extern const std::set<int> mbTriggers2014;
+   extern const std::set<int> mbTriggers2016;
 }
 #endif

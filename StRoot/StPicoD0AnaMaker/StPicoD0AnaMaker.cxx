@@ -67,9 +67,9 @@ using namespace fastjet;
 
 ClassImp(StPicoD0AnaMaker)
 
-  StPicoD0AnaMaker::StPicoD0AnaMaker(char const * name,char const * inputFilesList, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil): 
+  StPicoD0AnaMaker::StPicoD0AnaMaker(char const * name,char const * inputFilesList, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil, int pYear):
     StMaker(name),mPicoDstMaker(picoDstMaker),mPicoD0Event(NULL), mGRefMultCorrUtil(grefmultCorrUtil),
-    mOutFileName(outName), mInputFileList(inputFilesList),mOutputFile(NULL), mChain(NULL), mEventCounter(0){}
+    mOutFileName(outName), mInputFileList(inputFilesList),mOutputFile(NULL), mChain(NULL), mEventCounter(0),mYear(pYear){}
 
 Int_t StPicoD0AnaMaker::Init()
 {
@@ -297,14 +297,12 @@ Int_t StPicoD0AnaMaker::Make()
 
 
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
-  // if(!(isGoodEvent()) || !event->isMinBias())//minBias trigger requires
+
   
-  if(!(isGoodEvent()))//minBias trigger requires
+  if(!(isGoodEvent(mYear)))//minBias trigger requires
   {
-  //Vrátí kód když je event špatný
-    return kStOK;
+     return kStOK;
   }
-  
 
   if(!mGRefMultCorrUtil) {
     LOG_WARN << " No mGRefMultCorrUtil! Skip! " << endl;
@@ -315,36 +313,14 @@ Int_t StPicoD0AnaMaker::Make()
   int centrality  = mGRefMultCorrUtil->getCentralityBin9();
   if(centrality<0) {
     LOG_WARN << "not minBias sample!" << endl;
-    return kStWarn;
+    return kStOK;
   }
-  // if(!(centrality==4||centrality==5||centrality==6))//minBias trigger requires
-  // {
-  //   LOG_WARN << " Not Good Event! Skip! " << endm;
-  //   return kStWarn;
-  // }
-  //if(event) {
-    //pVtx = event->primaryVertex();
      pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
      vtxz->Fill(pVtx.z());
      vtxr->Fill(pVtx.x(),pVtx.y());
      NEvent->Fill(0);
      hcentr->Fill(centrality);
 
-  //}
-
-
-
-
-  /*
-  for(int k=0;k<3;k++)
-    getHadronCorV2(k);//Calculate Hadron V2
-  */
-  /*
-  int centBin = 0;
-  if(centrality>=7) centBin=1;
-  else if(centrality>=4)  centBin=2;
-  else centBin=3;
-  */
 //---------------------------------
 int eventID = mPicoD0Event->eventId();
 int RunId = mPicoD0Event->runId();
@@ -370,13 +346,16 @@ std::vector<FourMomentum> D0_fourmomentum;
     StPicoTrack const* pion = picoDst->track(kp->pionIdx());
 
     if (!isGoodTrack(kaon) || !isGoodTrack(pion)) continue;
+    //cout << "Is good track" << endl;
     if (!isTpcPion(pion)) continue;
+    //cout << "Is TPC pion" << endl;
     bool tpcKaon = isTpcKaon(kaon,&pVtx);
     float kBeta = getTofBeta(kaon,&pVtx,picoDst);
     bool tofAvailable = kBeta>0;
     bool tofKaon = tofAvailable && isTofKaon(kaon,kBeta);
     bool goodKaon = (tofAvailable && tofKaon) || (!tofAvailable && tpcKaon);
     if(!goodKaon) continue;
+    //cout << "Is good kaon" << endl;
 
     int charge=0;
     float d0Pt = kp->pt();  
@@ -385,13 +364,7 @@ std::vector<FourMomentum> D0_fourmomentum;
     //cout << "mass: " << dMass << endl;
     if(d0Pt>10) continue;
 
-    ///////int fitindex = 5;
-    /*
-    if(d0Pt<5)
-      fitindex = static_cast<int>(d0Pt);
-    double reweight_eff = (efficiency[0][fitindex]/efficiency[centBin][fitindex]);
-    cout << "test: " << reweight_eff << endl;
-    */
+
     double reweight_eff = 1.;
     //if((charge=isD0Pair150(kp))!=0 )
     double pimass = 0.13957018;
@@ -1042,27 +1015,26 @@ int StPicoD0AnaMaker::isD0PairOld(StKaonPion const* const kp) const
 
 
 
-bool StPicoD0AnaMaker::isGoodEvent()
+bool StPicoD0AnaMaker::isGoodEvent(int mYear)
 {
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
   // return (event->triggerWord() & mycuts::triggerWord) &&
-  return (isMBTrigger() &&
+  return (isMBTrigger(mYear) &&
       sqrt(event->primaryVertex().x()*event->primaryVertex().x()+event->primaryVertex().y()*event->primaryVertex().y()) < mycuts::vz &&
       fabs(event->primaryVertex().z()) < mycuts::vz &&
       fabs(event->primaryVertex().z() - event->vzVpd()) < mycuts::vzVpdVz);
   //  return event->triggerWord() & mycuts::triggerWord;
 }
-bool StPicoD0AnaMaker::isMBTrigger()
+bool StPicoD0AnaMaker::isMBTrigger(int mYear)
 {
-  StPicoEvent *event = (StPicoEvent *)picoDst->event();
-  return (event->isTrigger(520001) ||// VPDMB-5-p-sst (production 1, physics stream)||
-      event->isTrigger(520011)|| // VPDMB-5-p-sst
-      event->isTrigger(520021)|| // VPDMB-5-p-sst
-      event->isTrigger(520031)|| // VPDMB-5-p-sst
-      event->isTrigger(520041)|| // VPDMB-5-p-sst
-      event->isTrigger(520051)|| // VPDMB-5-p-sst
-      event->isTrigger(570002)|| // VPDMB-5-nosst (production 2, nosst stream)
-      event->isTrigger(570001)); // VPDMB-5-sst (production 2, sst stream )
+ const std::set<int>* mbTriggers = nullptr;
+
+      if(mYear ==2016) mbTriggers = &mycuts::mbTriggers2016;
+      if(mYear ==2014) mbTriggers = &mycuts::mbTriggers2014;
+
+      StPicoEvent* event = static_cast<StPicoEvent*>(mPicoDstMaker->picoDst()->event());
+      return std::any_of(mbTriggers->begin(), mbTriggers->end(), [&](int trigger) { return event->isTrigger(trigger); });
+
 }
 //-----------------------------------------------------------------------------
 bool StPicoD0AnaMaker::isGoodTrack(StPicoTrack const * const trk) const

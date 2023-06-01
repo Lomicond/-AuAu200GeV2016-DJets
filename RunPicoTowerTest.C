@@ -1,0 +1,1 @@
+StRoot/macros/RunPicoTowerTest.C

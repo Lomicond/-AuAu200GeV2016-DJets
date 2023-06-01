@@ -68,7 +68,7 @@ class StPicoD0AnaMaker : public StMaker
 {
   public:
     StPicoD0AnaMaker(char const * name, char const * inputFilesList, 
-        char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil);
+        char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil, int pYear);
     virtual ~StPicoD0AnaMaker();
 
     virtual Int_t Init();
@@ -86,6 +86,7 @@ class StPicoD0AnaMaker : public StMaker
   StEmcADCtoEMaker *mADCtoEMaker;
   StBemcTables     *mTables;
   private:
+   int mYear;
     StPicoD0AnaMaker() {}
     void readNextEvent();
     ofstream fout;
@@ -100,8 +101,8 @@ class StPicoD0AnaMaker : public StMaker
     int isD0PairCentrality_pt(StKaonPion const*, int Centrality) const;
     //-------------------------------------------
     int D0Reco(StThreeVectorF *);
-    bool isGoodEvent();
-    bool isMBTrigger();
+    bool isGoodEvent(int mYear);
+    bool isMBTrigger(int mYear);
     bool  isGoodTrack(StPicoTrack const*) const;
     bool  isGoodTrack2(StPicoTrack const*) const; //my
     bool  isGoodHadron(StPicoTrack const*) const;

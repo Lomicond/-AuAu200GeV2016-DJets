@@ -10,7 +10,7 @@
  */
 
 #include "StCuts.h"
-
+#include <set>
 namespace mycuts
 {
    // path to lists of triggers prescales
@@ -96,7 +96,19 @@ float const pionkaonDCA_cut[6][5] ={    {0.0071,     0.0076,        0.0078,     
 
 
 
+   //2014
+   //int const mTriggerId[nTrig] = {450050, 450060,450005, 450015,450025};
+   const std::set<int> mbTriggers2014 = {
+      450050, 450060, 450005, 450015, 450025
+   };
 
+
+   //2016
+   //int const mTriggerId[nTrig] = {520001, 520011,520021,520031,520041,520051,570002,570001};
+   const std::set<int> mbTriggers2016 = {
+     520001, 520011, 520021, 520031, 520041, 520051,           // VPDMB-5-p-sst
+     570002, 570001                                            // VPDMB-5-nosst  (production 2, nosst stream), VPDMB-5-sst (production 2, sst stream )
+   };
 
 
 
