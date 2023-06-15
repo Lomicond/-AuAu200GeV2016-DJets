@@ -1,0 +1,35 @@
+This analysis is divided into two parts:
+1. part: Looking for all pion-kaon pairs that are later saved to ROOT file.
+2. part: Reconstruction of D0 candidates from the previous ROOT file and later D-jets reconstruction.
+--------------------------------------------
+3. part: This separated part is for the mapping of bad towers.
+
+==========================================
+To test the first part, following the next steps. It will take ~15mins
+------------------------------------------
+starver SL20c
+cons
+root4star -l -b -q RunPicoD0EventMaker.C
+
+==========================================
+To test the second part, following the next steps. It will take ~8mins
+------------------------------------------
+starver SL20c
+cons
+root4star -l -b -q RunPicoD0EventMaker.C
+
+==========================================
+To test the third part, following the next steps. It will take ~8mins
+------------------------------------------
+starver SL20c
+cons
+root4star -l -b -q RunPicoTowerTest.C
+
+
+==========================================
+1. + 2. part
+In order to run code for higher statistics, use the following command
+//Do not forget to change absolute paths in JobSubmit2.cml
+==========================================
+./EmptyFolders.csh
+star-submit JobSubmit2.xml
