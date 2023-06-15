@@ -31,7 +31,10 @@ class StPicoPrescales : public TObject
     bool runExists(unsigned int run);
     int numberOfRuns() const;
     void fillPrescalesHist(TH1F*,unsigned int trg);
-
+    void createRunIndexFile(const std::string& filename);
+  const std::map<unsigned int, std::vector<float>>& getTable() const {
+    return mTable;
+  }
   private:
     std::string mPrescalesFilesDirectoryName;
     std::vector<unsigned int> mTriggersIds;

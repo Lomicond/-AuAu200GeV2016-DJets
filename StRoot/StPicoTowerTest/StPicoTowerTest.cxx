@@ -15,7 +15,7 @@
 #include "StPicoEvent/StPicoDst.h"
 #include "StPicoEvent/StPicoEvent.h"
 #include "StPicoEvent/StPicoTrack.h"
-
+#include "StPicoPrescales/StPicoPrescales.h"
 #include "StPicoTowerTest.h"
 #include "StPicoEvent/StPicoBTofPidTraits.h"
 #include "StPicoEvent/StPicoBTowHit.h"
@@ -62,7 +62,8 @@ Int_t StPicoTowerTest::Init()
 
   mPrescales = new StPicoPrescales(mycuts::prescalesFilesDirectoryName);
 
-
+  std::string outputFile = "RunIndexTable.txt";
+  mPrescales->createRunIndexFile(outputFile);
   mOutputFile = new TFile(mOutFileName.Data(), "RECREATE");
   mOutputFile->cd();
 
@@ -72,7 +73,7 @@ Int_t StPicoTowerTest::Init()
   MapTower_RunID_NEvents = new TH1D("MapTower_RunID_NEvents", "MapTower_RunID_NEvents", nRuns+1,0,nRuns+1); // 80 x 60 bins
   vtxr = new TH2D("vtxr",";PVtx.x() [cm]; PVtx.y() [cm]",100,-3,3,100,-3,3);
 
- 
+
  
    mOutputFile->cd();
 
@@ -124,6 +125,8 @@ Int_t StPicoTowerTest::Finish()
 //-----------------------------------------------------------------------------
 Int_t StPicoTowerTest::Make()
 {
+  
+  //StPicoPrescales prescales(mycuts::prescalesFilesDirectoryName);
 
   //readNextEvent();
   if (!mPicoDstMaker)
@@ -140,7 +143,8 @@ Int_t StPicoTowerTest::Make()
     return kStWarn;
   }
 
-  //cout << "rok: " << mYear << endl;
+
+
 
   StThreeVectorF pVtx(-999.,-999.,-999.);
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
@@ -155,21 +159,24 @@ Int_t StPicoTowerTest::Make()
     return kStWarn;
   }
 
-  mGRefMultCorrUtil->init(picoDst->event()->runId());
-  mGRefMultCorrUtil->initEvent(picoDst->event()->grefMult(),pVtx.z(),picoDst->event()->ZDCx()) ;
+  //mGRefMultCorrUtil->init(picoDst->event()->runId());
+  //mGRefMultCorrUtil->initEvent(picoDst->event()->grefMult(),pVtx.z(),picoDst->event()->ZDCx()) ;
 
-  int centrality  = mGRefMultCorrUtil->getCentralityBin9();
-
+  //int centrality  = mGRefMultCorrUtil->getCentralityBin9();
+  /*
   if(centrality<0) {
     //LOG_WARN << "not minBias sample!" << endl;
     return kStOK;
   }
-
+  */
   pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
   vtxr->Fill(pVtx.x(),pVtx.y());
 
   int runIndex = mPrescales->runIndex(picoDst->event()->runId());
   MapTower_RunID_NEvents->Fill(runIndex);
+
+//cout << runIndex << picoDst->event()->runId() << endl;
+
 
       for (int iTow = 0; iTow < 4800; iTow++){ //get btow info
         
@@ -246,7 +253,7 @@ bool StPicoTowerTest::isMBTrigger(int mYear)
         520001, 520011, 520021, 520031, 520041, 520051,           // VPDMB-5-p-sst
         570002, 570001,                                           // VPDMB-5-nosst  (production 2, nosst stream), VPDMB-5-sst (production 2, sst stream )
         520201, 520211, 520221, 520231, 520241, 520251, 520261,   // BHT1*VPDMB-10
-        520203,                                                   // BHT
+        520203,                                                   // BHT3
         520101, 520111, 520121, 520131, 520141,                   // central-5  
         520007, 520017, 520027, 520037,                           // vpdmb-10
         520003, 520013, 520023, 520033, 520043,                   // VPDMB-5
@@ -278,8 +285,6 @@ bool StPicoTowerTest::isGoodTrack(StPicoTrack const * const trk) const
   return trk->gPt() > mycuts::minPt && trk->nHitsFit() >= mycuts::nHitsFit && HFTCondition;
   //return  trk->nHitsFit() >= mycuts::nHitsFit;
 }
-
-
 
 
 

@@ -168,4 +168,22 @@ bool StPicoPrescales::runExists(unsigned int run)
       else return false;
    }
 }
+void StPicoPrescales::createRunIndexFile(const std::string& filename) {
+  std::ofstream file(filename);
+  if (!file) {
+    std::cerr << "Failed to create the output file: " << filename << std::endl;
+    return;
+  }
+
+  for (const auto& entry : mTable) {
+    unsigned int runID = entry.first;
+    unsigned int runIndex2 = runIndex(runID);
+    file << runID << '\t' << runIndex2 << '\n';
+  }
+
+  file.close();
+}
+
+
+
 

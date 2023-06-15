@@ -32,6 +32,7 @@
 #include "TChain.h"
 #include "StMaker.h"
 //
+#include "StPicoPrescales/StPicoPrescales.h"
 #include "StThreeVectorF.hh"
 #include "TSpectrum.h"
 #include "Math/Functor.h"
@@ -91,7 +92,6 @@ class StPicoTowerTest : public StMaker
     bool isGoodEvent();
     bool isMBTrigger(int mYear);
     bool isGoodTrack(StPicoTrack const*) const;
-
 
     StPicoDstMaker* mPicoDstMaker;
     StPicoPrescales* mPrescales;

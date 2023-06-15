@@ -1,0 +1,48 @@
+<job minFilesPerProcess="10" maxFilesPerProcess="15" simulateSubmission="false" fileListSyntax="xrootd" >
+	
+ <!--<stdout discard="true" />-->
+<!--<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062049-17179012,storage!=hpss,storage=local" preferStorage="local" singleCopy="true" nFiles="all" />-->
+
+<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,storage!=hpss,runnumber[]17122629-17136725" preferStorage="local" singleCopy="true" nFiles="all" /> 
+
+        <stdout URL="file:./out/$JOBID.out" />
+        <stderr URL="file:./err/$JOBID.err" />
+                
+        <Generator>
+        <Location>./report/</Location>
+        <ScriptLocation>./csh/</ScriptLocation>
+        <ListLocation>./list/</ListLocation>
+        </Generator>
+                                                
+<command>
+starver SL20c
+<!--root4star -b -l -q StRoot/macros/loadSharedHFLcd ibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
+root4star -b -l -q RunPicoTowerTest.C\(\"$FILELIST\",\"7_Tower_${JOBINDEX}.root\",2016,false\) &gt;&amp; 7_Tower_${JOBINDEX}.log
+
+</command>
+
+	<ResourceUsage>
+		<Memory>
+			<MinMemory>4000</MinMemory>
+			<!-- <MaxMemory>2000</MaxMemory> -->
+		</Memory>
+	</ResourceUsage>
+
+  <!--<input URL="filelist:./&listOfFiles;" />-->
+  <output fromScratch="*.root" toURL="/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/production/" />
+  <output fromScratch="*.log" toURL="/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/log/" />
+
+<SandBox installer="ZIP">
+	<Package name="LocalLibraries">
+	<File>file:./StRoot/</File>
+    <File>file:./StRoot/macros/RunPicoTowerTest.C</File>
+    <File>file:./RunPicoTowerTest.C</File>
+    <File>file:./StRoot/macros/loadSharedAnalysisLibraries2.C</File>
+    <File>file:./StRoot/macros/loadSharedHFLibraries.C</File>
+    <File>file:./run14AuAu200GeVPrescales/</File>
+    <File>file:./picoList_bad_MB.list</File>
+	<File>file:./.sl73_gcc485/</File>
+	</Package>
+</SandBox>
+
+</job>

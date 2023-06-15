@@ -18,7 +18,7 @@ do
             read -p "Do you want to change it to 2016? (y/n): " answer
             if [ "$answer" == "y" ]; then
                 sed -i 's/int pYear = 2014/int pYear = 2016/g' "$file"
-                echo "Succesfully set to ${GREEN}2016${NC}."
+                echo -e "Succesfully set to ${GREEN}2016${NC}."
             fi
         elif grep -q 'int pYear = 2016' "$file"; then
             echo -e "The production is set to ${GREEN}2016${NC} in file ${GREEN}$file${NC}."
