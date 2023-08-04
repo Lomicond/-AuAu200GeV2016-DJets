@@ -85,12 +85,15 @@ class StPicoD0AnaMaker : public StMaker
           virtual Double_t vertexCorrectedEta(double eta, double vz);
   StEmcADCtoEMaker *mADCtoEMaker;
   StBemcTables     *mTables;
+    void setGhostMaxrap(float fGhostMaxrap);
+    void setNJetsRemove(int nJetsRemove);
   private:
    int mYear;
     StPicoD0AnaMaker() {}
     void readNextEvent();
     ofstream fout;
-
+    float fGhostMaxrap;
+    int nJetsRemove;
     bool isGoodPair(StKaonPion const*) const;
     int isD0Pair(StKaonPion const*) const;
     int isD0Pair50(StKaonPion const*) const;
@@ -118,6 +121,7 @@ class StPicoD0AnaMaker : public StMaker
     bool getCorV2(int , double);
     bool isEtaGap(double, double ,double);
     float getD0CorV2(int *sumPair, vector<const StKaonPion *> cand);
+    bool IsBadEnergyRun(int);
 
     StPicoDstMaker* mPicoDstMaker;
     StPicoD0Event* mPicoD0Event;
@@ -228,6 +232,12 @@ inline void StPicoD0AnaMaker::setCutETmin(float min)            { fETmincut = mi
 
 inline void StPicoD0AnaMaker::setMaxDcaZHadronCorr(float max)           { maxdcazhadroncorr = max;}
 
+inline void StPicoD0AnaMaker::setGhostMaxrap(float fGhostMaxrap) {
+    StPicoD0AnaMaker::fGhostMaxrap = fGhostMaxrap;
+}
+inline void StPicoD0AnaMaker::setNJetsRemove(int nJetsRemove) {
+    StPicoD0AnaMaker::nJetsRemove = nJetsRemove;
+}
 inline void StPicoD0AnaMaker::readNextEvent()
 {
   mChain->GetEntry(mEventCounter++);

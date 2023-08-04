@@ -31,7 +31,7 @@ void loadSharedAnalysisLibraries();
 void progres(double N, double D);
 
 void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
- string outFileName="Test_AnaMaker.root", string badRunListFileName = "picoList_bad_MB.list",int pYear = 2016, bool Testing = true)
+ string outFileName="Test_AnaMaker.root"/*, string badRunListFileName = "picoList_bad_MB.list"*/,int pYear = 2016, bool Testing = true)
 {
    //Check STAR Library. Please set SL_version to the original star library used in the production from http://www.star.bnl.gov/devcgi/dbProdOptionRetrv.pl
    string SL_version;
@@ -52,7 +52,7 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
       exit(0);
    }
 
-   int nEntries = 1000;
+   int nEntries = 10000;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);
@@ -98,8 +98,10 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
    picoD0AnaMaker->setCutETmin(0.2);
    picoD0AnaMaker->setHadronCorr(1.);
    picoD0AnaMaker->setMaxDcaZHadronCorr(3.0); //cm, max DCA_z for global tracks used for hadronic correction 
+   picoD0AnaMaker->setNJetsRemove(1);
+   picoD0AnaMaker->setGhostMaxrap(1.0);
    // -- File name of bad run list
-   d0Cuts->setBadRunListFileName(badRunListFileName.c_str());
+   //d0Cuts->setBadRunListFileName(badRunListFileName.c_str());
 
    // add your cuts here.
 

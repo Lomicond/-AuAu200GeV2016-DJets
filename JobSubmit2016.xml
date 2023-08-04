@@ -1,0 +1,54 @@
+<job minFilesPerProcess="3" maxFilesPerProcess="30" simulateSubmission="false" fileListSyntax="xrootd" >
+	
+ <!--<stdout discard="true" />-->
+
+<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062047-17179012,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="25000" />
+
+        <stdout URL="file:./out/$JOBID.out" />
+        <stderr URL="file:./err/$JOBID.err" />
+                
+        <Generator>
+        <Location>./report/</Location>
+        <ScriptLocation>./csh/</ScriptLocation>
+        <ListLocation>./list/</ListLocation>
+        </Generator>
+                                                
+<command>
+starver SL20c
+<!--root4star -b -l -q StRoot/macros/loadSharedHFLibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
+root4star -b -l -q RunPicoD0EventMaker.C\(\"$FILELIST\",\"Output_${JOBINDEX}.root\",2016,false\) &gt;&amp; First_${JOBINDEX}.log
+echo ${SCRATCH}/Output_${JOBINDEX}.root.picoD0.root > TMPinput${JOBINDEX}.list
+root4star -b -l -q RunPicoD0AnaMaker.C\(\"TMPinput${JOBINDEX}.list\",\"$FILELIST\",\"D0_Output_${JOBINDEX}.root\",2016,false\) &gt;&amp; Second_${JOBINDEX}.log
+
+<!--\"$FILELIST\" -->
+<!--tar -zcvf ${JOBID}.log.tgz ${JOBID}.log -->
+</command>
+
+	<ResourceUsage>
+		<Memory>
+			<MinMemory>4000</MinMemory>
+			<!-- <MaxMemory>2000</MaxMemory> -->
+		</Memory>
+	</ResourceUsage>
+
+  <!--<input URL="filelist:./&listOfFiles;" />-->
+  <output fromScratch="D0*.root" toURL="/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/production/" />
+  <output fromScratch="*.log" toURL="/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/log/" />
+
+<SandBox installer="ZIP">
+	<Package name="LocalLibraries">
+		<File>file:./StRoot/</File>
+    <File>file:./StRoot/macros/RunPicoD0EventMaker.C</File>
+    <File>file:./StRoot/macros/RunPicoD0AnaMaker.C</File>
+    <File>file:./StRoot/macros/loadSharedAnalysisLibraries.C</File>
+    <File>file:./StRoot/macros/loadSharedLibraries.C</File>
+    <File>file:./StRoot/macros/loadSharedAnalysisLibraries_EM.C</File>
+        <File>file:./run14AuAu200GeVPrescales/</File>
+    <File>file:./picoList_bad_MB.list</File>
+     <File>file:./fastjet/</File>
+      <File>file:./siscone/</File>
+		<File>file:./.sl73_gcc485/</File>
+	</Package>
+</SandBox>
+
+</job>

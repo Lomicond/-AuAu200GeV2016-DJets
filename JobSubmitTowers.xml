@@ -3,7 +3,7 @@
  <!--<stdout discard="true" />-->
 <!--<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062049-17179012,storage!=hpss,storage=local" preferStorage="local" singleCopy="true" nFiles="all" />-->
 
-<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,storage!=hpss,runnumber[]17122629-17136725" preferStorage="local" singleCopy="true" nFiles="all" /> 
+<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,storage!=hpss,runnumber[]17164920-17179016" preferStorage="local" singleCopy="true" nFiles="all" /> 
 
         <stdout URL="file:./out/$JOBID.out" />
         <stderr URL="file:./err/$JOBID.err" />
@@ -17,7 +17,7 @@
 <command>
 starver SL20c
 <!--root4star -b -l -q StRoot/macros/loadSharedHFLcd ibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
-root4star -b -l -q RunPicoTowerTest.C\(\"$FILELIST\",\"7_Tower_${JOBINDEX}.root\",2016,false\) &gt;&amp; 7_Tower_${JOBINDEX}.log
+root4star -b -l -q RunPicoTowerTest.C\(\"$FILELIST\",\"10_Tower_${JOBINDEX}.root\",2016,false\) &gt;&amp; 10_Tower_${JOBINDEX}.log
 
 </command>
 
