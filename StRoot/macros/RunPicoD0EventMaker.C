@@ -96,14 +96,14 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
    {
       chain->Clear();
       int iret = chain->Make();
-      if(iEvent%10==0) progres(iEvent,nEvents);
+      if(Testing&&iEvent%10==0) progres(iEvent,nEvents);
       if (iret)
       {
          cout << "Bad return code!" << iret << endl;
          break;
       }
    }
-   if(nEvents%10!=0) progres(nEvents,nEvents);
+   if(Testing&&nEvents%10!=0) progres(nEvents,nEvents);
    //-------------------------------------------
 	
 	cout << "****************************************** " << endl;

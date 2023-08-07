@@ -132,14 +132,14 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
    {
       chain->Clear();
       int iret = chain->Make();
-      if(iEvent%200==0) progres(iEvent,nEntries);
+      if(Testing && iEvent%200==0) progres(iEvent,nEntries);
       if (iret)
       {
          cout << "Bad return code!" << iret << endl;
          break;
       }
    }
-   if(nEntries%200!=0) progres(nEntries,nEntries);
+   if(Testing &&nEntries%200!=0) progres(nEntries,nEntries);
    //--------------------------------------------------------
 
    chain->Finish();
