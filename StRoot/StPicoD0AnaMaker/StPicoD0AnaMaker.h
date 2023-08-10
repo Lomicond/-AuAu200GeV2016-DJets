@@ -87,6 +87,7 @@ class StPicoD0AnaMaker : public StMaker
   StBemcTables     *mTables;
     void setGhostMaxrap(float fGhostMaxrap);
     void setNJetsRemove(int nJetsRemove);
+    void setMaxNeutralFraction(float max);
   private:
    int mYear;
     StPicoD0AnaMaker() {}
@@ -99,9 +100,10 @@ class StPicoD0AnaMaker : public StMaker
     int isD0Pair50(StKaonPion const*) const;
     int isD0Pair150(StKaonPion const*) const;
     int isD0PairOld(StKaonPion const*) const;
+    float maxneutralfrac;
     //-------------------------------------------
     //My 
-    int isD0PairCentrality_pt(StKaonPion const*, int Centrality) const;
+    int isD0PairCentrality_pt(StKaonPion const* const kp, int Centrality, int mYear) const;
     //-------------------------------------------
     int D0Reco(StThreeVectorF *);
     bool isGoodEvent(int mYear);
@@ -242,6 +244,9 @@ inline void StPicoD0AnaMaker::readNextEvent()
 {
   mChain->GetEntry(mEventCounter++);
 }
+
+inline void StPicoD0AnaMaker::setMaxNeutralFraction(float max)						{ maxneutralfrac = max;}
+
 inline void StPicoD0AnaMaker::setHadronCorr(float corr)   { fHadronCorr = corr;} 
 
 inline void StPicoD0AnaMaker::setHFCuts(StHFCuts* cuts)   

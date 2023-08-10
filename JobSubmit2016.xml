@@ -2,8 +2,7 @@
 	
  <!--<stdout discard="true" />-->
 
-<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062047-17179012,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="25000" />
-
+<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062049-17179012,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="5000" />
         <stdout URL="file:./out/$JOBID.out" />
         <stderr URL="file:./err/$JOBID.err" />
                 

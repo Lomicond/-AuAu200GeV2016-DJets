@@ -139,13 +139,11 @@ Int_t StPicoD0AnaMaker::Init()
   hcharged_tr = new TH1F("hcharged_tr","hcharged_tr;Charge;",5,-1,1);
 
 //jet #        rapidity             phi              pt           index
-  Jets = new TNtuple("Jets", "Jets", "RunId:EventID:NJet:rapidity:phi:pt:index:D0mass:D0_r:D0_pT:lambda_1_1:z:E");
+  Jets = new TNtuple("Jets", "Jets", "RunId:centrality:NJet:pseudorapidity:jet_phi:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:z");
   //D0_Daughter       = 0 not D0, antiD0 nor daughter
-  //                  = 1 D0
-  //                  = -1 anti D0
-  //                  = 2 daughter pion
-  //                  = -2 daughter kaon
-
+  //                  = 2 D0
+  //                  = -2 anti D0
+  // -> positive runID = D0, negative runID = antiD0
   const int xbinSize=100;
 
   float xbin[101];
@@ -385,7 +383,7 @@ std::vector<FourMomentum> D0_fourmomentum;
     double pimass = 0.13957018;
     double kaonmass = 0.493677;
       
-    if((charge=isD0PairCentrality_pt(kp,centrality))!=0 )
+    if((charge=isD0PairCentrality_pt(kp,centrality, mYear))!=0 )
     {
         /*
       TLorentzVector kaonVec(kaon->gMom().Px(), kaon->gMom().Py(), kaon->gMom().Pz(), sqrt(kaonmass*kaonmass+kaon->gMom().Mag()*kaon->gMom().Mag()));
@@ -542,7 +540,7 @@ std::vector<FourMomentum> D0_fourmomentum;
               PseudoJet inputTower(px, py, pz, towE);
               //cout << "px: " << px << " py: " << py << " pz: " << pz << " towE: " << towE << endl; 
               if (inputTower.perp() > fETmincut){
-                //inputTower.set_user_index(0); //default index is -1, 0 means neutral particle
+                inputTower.set_user_index(10); //default index is -1, 10 means neutral particle
                 neutraljetTracks.push_back(inputTower);
                 input_particles.push_back(inputTower);
               }
@@ -620,31 +618,49 @@ std::vector<FourMomentum> D0_fourmomentum;
     double ptmin = 0.0;
 
     vector<fastjet::PseudoJet> inclusive_jets = sorted_by_pt(clust_seq_hard.inclusive_jets(ptmin));
+    /*
     //To print results
     cout << "Ran " << jet_def.description() << endl;
     printf("%5s %15s %15s %15s %15s\n","jet #", "rapidity", "phi", "pt", "index");
-     
+     */
     for (unsigned int i = 0; i < inclusive_jets.size(); i++) {
       int user_index = 0;
       double Delta_R_D0 = 0;
-      double lambda_alpha = 1;
-      double lambda_kappa = 1;
+      double lambda_alpha_1 = 1.;
+      double lambda_alpha_1half = 1.5;
+      double lambda_alpha_2 = 2.;
+      double lambda_alpha_3 = 3.;
+      double lambda_kappa = 1.;
       double zet = 0;
-      double lambda = 0;
+      double lambda_1_1 = 0;
+      double lambda_1_1half = 0;
+      double lambda_1_2 = 0;
+      double lambda_1_3 = 0;
       double pT_jet = inclusive_jets[i].perp();
       double pT_jet_corr = pT_jet - rho * inclusive_jets[i].area();
       double px_jet = inclusive_jets[i].px();
       double px_jet_corr = px_jet - rho * inclusive_jets[i].area_4vector().px();
       double py_jet = inclusive_jets[i].py();
       double py_jet_corr = py_jet - rho * inclusive_jets[i].area_4vector().py();
+
+      double neutralpT = 0;
+
       const vector<fastjet::PseudoJet>& constituents = inclusive_jets[i].constituents();
 
         for (vector<fastjet::PseudoJet>::const_iterator particle = constituents.begin(); particle != constituents.end(); ++particle) {
-  
+
+            //Fraction of neutral particles
+            if (particle->user_index() == 10) {
+                neutralpT += particle->pt();
+            }
+
           int index = particle->user_index(); // zjisteni indexu castice v rekonstruovanem PseudoJet
           //cout << "index: " << index << endl;
           double Delta_R =delta_R(inclusive_jets[i].eta(),inclusive_jets[i].phi(),particle->eta(),particle->phi());
-          lambda+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha);
+          lambda_1_1+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1);
+          lambda_1_1half+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1half);
+          lambda_1_2+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_2);
+          lambda_1_3+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_3);
            //Is there D0 in this Jet?
           if (abs(index) == 2 ) {
              user_index=index;
@@ -653,6 +669,9 @@ std::vector<FourMomentum> D0_fourmomentum;
              zet = (D0_fourmomentum[nD0].px*px_jet_corr+D0_fourmomentum[nD0].py*py_jet_corr)/(pT_jet_corr*pT_jet_corr);
            }
         } // end loop over jet constituents
+        double nfraction = neutralpT/pT_jet;
+        //cout << "nfraction: " << nfraction << endl;
+        if (nfraction > maxneutralfrac) continue;
 
 
       if (abs(user_index) ==2){
@@ -662,31 +681,33 @@ std::vector<FourMomentum> D0_fourmomentum;
       double D0_pT = sqrt(D0_fourmomentum[nD0].px*D0_fourmomentum[nD0].px+D0_fourmomentum[nD0].py*D0_fourmomentum[nD0].py);
       //eventID, RunId, inclusive_jets.size(),inclusive_jets[i].rap(), inclusive_jets[i].phi(),
       // inclusive_jets[i].perp(), user_index,D0mass,D0_r,D0_pT,lambda_1_1,z, E
-      Jets->Fill( eventID,                                                 
-                  RunId, 
+      Jets->Fill( RunId*user_index/2.,
+                  centrality,
                   D0_fourmomentum.size(),
-                  inclusive_jets[i].rap(), 
+                  inclusive_jets[i].pseudorapidity(),
                   inclusive_jets[i].phi(),
+                  pT_jet,
                   pT_jet_corr,
-                  user_index, 
                   D0mass,
                   Delta_R_D0,
                   D0_pT,
-                  lambda,
-                  zet,
-                  inclusive_jets[i].E()
+                  lambda_1_1,
+                  lambda_1_1half,
+                  lambda_1_2,
+                  lambda_1_3,
+                  zet
                 );  
 
 
-        printf("\033[32m%5u %15.8f %15.8f %15.8f %15d\033[0m\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);
+       // printf("\033[32m%5u %15.8f %15.8f %15.8f %15d\033[0m\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);
       } else{
-        printf("%5u %15.8f %15.8f %15.8f %15d\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);
+       // printf("%5u %15.8f %15.8f %15.8f %15d\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);
       }
  
   }// end of inclusive jet loop
     //Delete vectors to avoid a pileup
     inclusive_jets.clear();
- cout << "----------------------------------------------" << endl;
+// cout << "----------------------------------------------" << endl;
 
     input_particles.clear();
     chargedjetTracks.clear();
@@ -967,13 +988,13 @@ int StPicoD0AnaMaker::isD0Pair150(StKaonPion const* const kp) const
     return 0;
 }
 
-int StPicoD0AnaMaker::isD0PairCentrality_pt(StKaonPion const* const kp, int Centrality) const
+int StPicoD0AnaMaker::isD0PairCentrality_pt(StKaonPion const* const kp, int Centrality, int mYear) const
 {
 
-  StPicoTrack const* kaon = picoDst->track(kp->kaonIdx());
-  StPicoTrack const* pion = picoDst->track(kp->pionIdx());
-  bool pairCuts = false;
-  
+    StPicoTrack const* kaon = picoDst->track(kp->kaonIdx());
+    StPicoTrack const* pion = picoDst->track(kp->pionIdx());
+    bool pairCuts = false;
+
 /*
   if(kp->pt()<0.5)
   {
@@ -1000,34 +1021,41 @@ int StPicoD0AnaMaker::isD0PairCentrality_pt(StKaonPion const* const kp, int Cent
   KPMom = 5;
   }*/
 
-  // Centr.   0-10%       10-20%         20-40%         40-60%        60-80%
-  // C_ID     8,7        6               5,4             3,2         1,0
-  // bin       0         1                 2               3           4
+    // Centr.   0-10%       10-20%         20-40%         40-60%        60-80%
+    // C_ID     8,7        6               5,4             3,2         1,0
+    // bin       0         1                 2               3           4
 
- int Centrality2 =  (Centrality == 8 || Centrality == 7) ? 0 :
-                    (Centrality == 6) ? 1 :
-                    (Centrality == 5 || Centrality == 4) ? 2 :
-                    (Centrality == 3 || Centrality == 2) ? 3 :
-                    (Centrality == 1 || Centrality == 0) ? 4 : -1;
-
-
-  int KPMom = (kp->pt() < 0.5) ? 0 : (kp->pt() < 1) ? 1 : (kp->pt() < 2) ? 2 : (kp->pt() < 3) ? 3 : (kp->pt() < 5) ? 4 : 5;
-
-  pairCuts =  sin(kp->pointingAngle())*kp->decayLength() < mycuts::DCA_D0_cut[KPMom][Centrality2] &&
-  kp->pionDca() > mycuts::pionDCA_cut[KPMom][Centrality2] && kp->kaonDca() > mycuts::kaonDCA_cut[KPMom][Centrality2] &&
-  kp->dcaDaughters() < mycuts::pionkaonDCA_cut[KPMom][Centrality2] && kp->decayLength()> mycuts::D0_decayLength_cut[KPMom][Centrality2];  
-
-  int charge = kaon->charge() * pion->charge();
-  if(charge>0)
-    charge = kaon->charge()>0 ? 1:2;
+    int Centrality2 =  (Centrality == 8 || Centrality == 7) ? 0 :
+                       (Centrality == 6) ? 1 :
+                       (Centrality == 5 || Centrality == 4) ? 2 :
+                       (Centrality == 3 || Centrality == 2) ? 3 :
+                       (Centrality == 1 || Centrality == 0) ? 4 : -1;
 
 
-  if(pairCuts)
-    return charge;
-  else
-    return 0;
+    int KPMom = (kp->pt() < 0.5) ? 0 : (kp->pt() < 1) ? 1 : (kp->pt() < 2) ? 2 : (kp->pt() < 3) ? 3 : (kp->pt() < 5) ? 4 : 5;
+
+    if (mYear == 2014){
+        pairCuts =  sin(kp->pointingAngle())*kp->decayLength() < mycuts::DCA_D0_cut_2014[KPMom][Centrality2] &&
+                    kp->pionDca() > mycuts::pionDCA_cut_2014[KPMom][Centrality2] && kp->kaonDca() > mycuts::kaonDCA_cut_2014[KPMom][Centrality2] &&
+                    kp->dcaDaughters() < mycuts::pionkaonDCA_cut_2014[KPMom][Centrality2] && kp->decayLength()> mycuts::D0_decayLength_cut_2014[KPMom][Centrality2] &&
+                    cos(kp->pointingAngle()) > mycuts::cosTheta_2014;
+    } else if (mYear == 2016){
+        pairCuts =  sin(kp->pointingAngle())*kp->decayLength() < mycuts::DCA_D0_cut_2016[KPMom][Centrality2] &&
+                    kp->pionDca() > mycuts::pionDCA_cut_2016[KPMom][Centrality2] && kp->kaonDca() > mycuts::kaonDCA_cut_2016[KPMom][Centrality2] &&
+                    kp->dcaDaughters() < mycuts::pionkaonDCA_cut_2016[KPMom][Centrality2] && kp->decayLength()> mycuts::D0_decayLength_cut_2016[KPMom][Centrality2] &&
+                    cos(kp->pointingAngle()) > mycuts::cosTheta_2016;
+    }
+
+    int charge = kaon->charge() * pion->charge();
+    if(charge>0)
+        charge = kaon->charge()>0 ? 1:2;
+
+
+    if(pairCuts)
+        return charge;
+    else
+        return 0;
 }
-
 int StPicoD0AnaMaker::isD0PairOld(StKaonPion const* const kp) const
 {
 

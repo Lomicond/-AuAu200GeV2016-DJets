@@ -87,9 +87,7 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
    StEmcADCtoEMaker *adc = new StEmcADCtoEMaker();
    StPicoD0AnaMaker*  picoD0AnaMaker = new StPicoD0AnaMaker("picoD0AnaMaker", d0list.c_str(), outFileName.c_str(), picoDstMaker,grefmultCorrUtil,pYear);
 
-   if(!Testing){
-      nEntries = picoD0AnaMaker->getEntries();
-   }
+
   
    StHFCuts* d0Cuts = new StHFCuts("d0Cuts");
 
@@ -100,6 +98,7 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
    picoD0AnaMaker->setMaxDcaZHadronCorr(3.0); //cm, max DCA_z for global tracks used for hadronic correction 
    picoD0AnaMaker->setNJetsRemove(1);
    picoD0AnaMaker->setGhostMaxrap(1.0);
+   picoD0AnaMaker->setMaxNeutralFraction(0.95);
    // -- File name of bad run list
    //d0Cuts->setBadRunListFileName(badRunListFileName.c_str());
 
@@ -125,6 +124,9 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
 
    chain->Init();
   
+   if(!Testing){
+      nEntries = picoD0AnaMaker->getEntries();
+   }
 
    cout << "nEntries: " << nEntries << endl;
    //--------------------------------------------------------   

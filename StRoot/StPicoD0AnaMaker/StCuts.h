@@ -37,6 +37,8 @@ namespace mycuts
 
    // tree kaonPion pair cuts
    extern float const cosTheta;
+   extern float const cosTheta_2014;
+   extern float const cosTheta_2016;
    extern float const dcaDaughters;
    extern float const decayLength;
    extern float const minMass;
@@ -57,11 +59,17 @@ namespace mycuts
    extern float const corDetaMin;
    extern float const corDetaMax;
 
-   extern float const pionDCA_cut[6][5];
-   extern float const kaonDCA_cut[6][5];
-   extern float const DCA_D0_cut[6][5];
-   extern float const D0_decayLength_cut[6][5];
-   extern float const pionkaonDCA_cut[6][5];
+   extern float const pionDCA_cut_2014[6][5];
+   extern float const kaonDCA_cut_2014[6][5];
+   extern float const DCA_D0_cut_2014[6][5];
+   extern float const D0_decayLength_cut_2014[6][5];
+   extern float const pionkaonDCA_cut_2014[6][5];
+
+   extern float const pionDCA_cut_2016[6][5];
+   extern float const kaonDCA_cut_2016[6][5];
+   extern float const DCA_D0_cut_2016[6][5];
+   extern float const D0_decayLength_cut_2016[6][5];
+   extern float const pionkaonDCA_cut_2016[6][5];
 
    extern const std::set<int> mbTriggers2014;
    extern const std::set<int> mbTriggers2016;
