@@ -138,6 +138,8 @@ Int_t StPicoD0AnaMaker::Init()
   hdca_tr = new TH1F("hdca_tr","hdca_tr; DCA(cm)",120,0,12);
   hcharged_tr = new TH1F("hcharged_tr","hcharged_tr;Charge;",5,-1,1);
 
+  Jet_grefmult_pt_background = new TH2D("Jet_rho_vs_grefmult","Jet_rho_vs_grefmult;grefmult; p_{T} (GeV/c)",1000,0,1000,100,-1,32);
+
 //jet #        rapidity             phi              pt           index
   Jets = new TNtuple("Jets", "Jets", "RunId:centrality:NJet:pseudorapidity:jet_phi:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:z");
   //D0_Daughter       = 0 not D0, antiD0 nor daughter
@@ -253,7 +255,7 @@ Int_t StPicoD0AnaMaker::Finish()
       hdca_pT->Write();
       hdca_tr->Write();
       hcharged_tr->Write();
-
+  Jet_grefmult_pt_background->Write();
 
  Jets->Write();   
 
@@ -316,13 +318,13 @@ Int_t StPicoD0AnaMaker::Make()
 
   mGRefMultCorrUtil->init(picoDst->event()->runId());
   mGRefMultCorrUtil->initEvent(picoDst->event()->grefMult(),pVtx.z(),picoDst->event()->ZDCx()) ;
-
+  //cout << "gref: " << picoDst->event()->grefMult() << endl;
   if (mGRefMultCorrUtil->isBadRun(picoDst->event()->runId()))
   {
   //cout<<"This is a bad run from mGRefMultCorrUtil! Skip! " << endl;
   return kStOK;
   }
-    
+    mGRefMultCorrUtil->getWeight();
   int centrality  = mGRefMultCorrUtil->getCentralityBin9();
   if(centrality<0) {
     LOG_WARN << "not minBias sample!" << endl;
@@ -341,7 +343,7 @@ UInt_t nTracks = picoDst->numberOfTracks();
 bool IsThereD0 = false;
 std::vector<double> DaughterPionTrackVector;
 std::vector<double> DaughterKaonTrackVector;
-
+//cout << OnlyTrackBasedJets << endl;
   // Vypsani hlavicky
   fastjet::ClusterSequence::print_banner();
 std::vector<FourMomentum> D0_fourmomentum;
@@ -539,7 +541,7 @@ std::vector<FourMomentum> D0_fourmomentum;
 
               PseudoJet inputTower(px, py, pz, towE);
               //cout << "px: " << px << " py: " << py << " pz: " << pz << " towE: " << towE << endl; 
-              if (inputTower.perp() > fETmincut){
+              if (inputTower.perp() > fETmincut && OnlyTrackBasedJets == 0){
                 inputTower.set_user_index(10); //default index is -1, 10 means neutral particle
                 neutraljetTracks.push_back(inputTower);
                 input_particles.push_back(inputTower);
@@ -557,19 +559,19 @@ std::vector<FourMomentum> D0_fourmomentum;
 
 
       if(!trk) continue;
-      if (!isGoodTrack(trk)) continue;
+      if (!isGoodJetTrack(trk,event)) continue;
 
-      double pT = trk->pMom().Perp();
+      double pT = trk->gMom().Perp();
       if(pT != pT) continue; // NaN test.
-      float eta = trk->pMom().PseudoRapidity();
-      float phi = trk->pMom().Phi();
+      float eta = trk->gMom().PseudoRapidity();
+      float phi = trk->gMom().Phi();
       float dca = (TVector3(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z()) - trk->origin()).Mag();
       float charged = trk->charge();
 
         //if the track is not daughter pion nor kion then...
       if (DaughterPionTrackVector[nD0] != trk->id() && DaughterKaonTrackVector[nD0] != trk->id()){
                               //      px,       py,               pz,                                 E, 
-      fastjet::PseudoJet pj(trk->pMom().x(),trk->pMom().y(),trk->pMom().z(), sqrt(trk->pMom().Mag()*trk->pMom().Mag()+pimass*pimass));
+      fastjet::PseudoJet pj(trk->gMom().x(),trk->gMom().y(),trk->gMom().z(), sqrt(trk->gMom().Mag()*trk->gMom().Mag()+pimass*pimass));
       //pj.set_user_index(0);
       input_particles.push_back(pj);
       chargedjetTracks.push_back(pj);
@@ -624,6 +626,9 @@ std::vector<FourMomentum> D0_fourmomentum;
     printf("%5s %15s %15s %15s %15s\n","jet #", "rapidity", "phi", "pt", "index");
      */
     for (unsigned int i = 0; i < inclusive_jets.size(); i++) {
+
+        //I will exclude jets with pseudorapidity greater than 1.0 - R
+        if (abs(inclusive_jets[i].pseudorapidity()) > (1.0 - R)) continue;
       int user_index = 0;
       double Delta_R_D0 = 0;
       double lambda_alpha_1 = 1.;
@@ -656,11 +661,14 @@ std::vector<FourMomentum> D0_fourmomentum;
 
           int index = particle->user_index(); // zjisteni indexu castice v rekonstruovanem PseudoJet
           //cout << "index: " << index << endl;
-          double Delta_R =delta_R(inclusive_jets[i].eta(),inclusive_jets[i].phi(),particle->eta(),particle->phi());
-          lambda_1_1+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1);
-          lambda_1_1half+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1half);
-          lambda_1_2+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_2);
-          lambda_1_3+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_3);
+            double Delta_R =delta_R(inclusive_jets[i].eta(),inclusive_jets[i].phi(),particle->eta(),particle->phi());
+            //Pouze pro nabite castice a D0
+            if (particle->user_index() != 10) {
+              lambda_1_1+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1);
+              lambda_1_1half+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1half);
+              lambda_1_2+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_2);
+              lambda_1_3+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_3);
+            }
            //Is there D0 in this Jet?
           if (abs(index) == 2 ) {
              user_index=index;
@@ -672,7 +680,6 @@ std::vector<FourMomentum> D0_fourmomentum;
         double nfraction = neutralpT/pT_jet;
         //cout << "nfraction: " << nfraction << endl;
         if (nfraction > maxneutralfrac) continue;
-
 
       if (abs(user_index) ==2){
 
@@ -696,8 +703,9 @@ std::vector<FourMomentum> D0_fourmomentum;
                   lambda_1_2,
                   lambda_1_3,
                   zet
-                );  
-
+                );
+      //picoDst->event()->grefMult()
+        Jet_grefmult_pt_background->Fill(picoDst->event()->grefMult(),rho);
 
        // printf("\033[32m%5u %15.8f %15.8f %15.8f %15d\033[0m\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);
       } else{
@@ -1137,11 +1145,15 @@ bool StPicoD0AnaMaker::isGoodTrack(StPicoTrack const * const trk) const
   return trk->gPt() > mycuts::minPt && trk->nHitsFit() >= mycuts::nHitsFit && HFTCondition;
   //return  trk->nHitsFit() >= mycuts::nHitsFit;
 }
-bool StPicoD0AnaMaker::isGoodTrack2(StPicoTrack const * const trk) const
+bool StPicoD0AnaMaker::isGoodJetTrack(StPicoTrack const * const trk,StPicoEvent const *const myEvent) const
 {
+    bool pTTrackJetCut = trk->gPt() > mycuts::jetTrackPtMin && trk->gPt() < mycuts::jetTrackPtMax;
+    bool etaTrackJetCut = fabs(trk->gMom().PseudoRapidity()) < mycuts::jetTrackEta;
+    bool nHitsTrackJetCut = trk->nHitsFit() >= mycuts::jetTracknHitsFit;
+    bool nHitsRatioTrackJetCut = (1.0*trk->nHitsFit()/trk->nHitsMax())>mycuts::jetTracknHitsRatio;
+    bool dcaTrackJetCut = fabs(trk->gDCA(myEvent->primaryVertex().x(),myEvent->primaryVertex().y(),myEvent->primaryVertex().z())) < mycuts::jetTrackDCA;
 
-  return trk->gPt() > mycuts::minPt && trk->nHitsFit() >= mycuts::nHitsFit;
-
+return pTTrackJetCut && etaTrackJetCut && nHitsTrackJetCut && nHitsRatioTrackJetCut && dcaTrackJetCut;
 }
 //-----------------------------------------------------------------------------
 bool StPicoD0AnaMaker::isGoodHadron(StPicoTrack const * const trk) const

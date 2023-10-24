@@ -28,6 +28,14 @@ namespace mycuts
    bool const requireHFT = true;
    float const minPt = 0.6;
 
+   //jetTrack
+   float const jetTrackPtMin = 0.2;
+   float const jetTrackPtMax = 30.0;
+   float const jetTrackEta = 1.0;
+    float const jetTracknHitsFit = 15;
+    float const jetTracknHitsRatio = 0.52; // nHitsFit/nHitsMax >= 0.52
+    float const jetTrackDCA = 3.0;
+
    //pions
    float const nSigmaPion = 3.0;
 
@@ -55,7 +63,7 @@ namespace mycuts
    float const corDetaMin = 0.75;
    float const corDetaMax = 10;
 
-      //Pt-Centrality-Cuts-2014
+      //Pt-Centrality-Cuts-2014 https://drupal.star.bnl.gov/STAR/system/files/2018_1109_D0spectra_Note.pdf
       //Centality                          0-10%       10-20%         20-40%         40-60%        60-80%
 float const pionDCA_cut_2014[6][5] = {     {0.0131,     0.0141,        0.0131,      0.0145,       0.0098},      //pT = 0-0.5
                                            {0.0105,     0.0100,        0.0113,      0.0128,       0.0098},      //pT = 0.5-1
@@ -97,7 +105,7 @@ float const pionkaonDCA_cut_2014[6][5] ={  {0.0071,     0.0076,        0.0078,  
                                            {0.0080,     0.0085,        0.0103,      0.0106,       0.0120}  };   //pT = 5-10
 
 
-    //Pt-Centrality-Cuts-2016
+    //Pt-Centrality-Cuts-2016 https://drupal.star.bnl.gov/STAR/system/files/D0AnaNote_Feb21_2019.pdf
     //Centality                                  0-10%       10-20%         20-40%         40-60%        60-80%
     float const pionDCA_cut_2016[6][5] = {     {0.0109,     0.0098,        0.0117,      0.0107,       0.0100},      //pT = 0-0.5
                                                {0.0106,     0.0110,        0.0106,      0.0106,       0.0096},      //pT = 0.5-1

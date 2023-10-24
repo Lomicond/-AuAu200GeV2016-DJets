@@ -1,8 +1,8 @@
-<job minFilesPerProcess="3" maxFilesPerProcess="30" simulateSubmission="false" fileListSyntax="xrootd" >
+<job minFilesPerProcess="20" maxFilesPerProcess="40" simulateSubmission="false" fileListSyntax="xrootd" >
 	
  <!--<stdout discard="true" />-->
 
-<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062049-17179012,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="5000" />
+<input URL="catalog:star.bnl.gov?production=P16id,trgsetupname=AuAu_200_production_low_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="all" />
         <stdout URL="file:./out/$JOBID.out" />
         <stderr URL="file:./err/$JOBID.err" />
                 
@@ -13,11 +13,11 @@
         </Generator>
                                                 
 <command>
-starver SL20c
+starver SL22c
 <!--root4star -b -l -q StRoot/macros/loadSharedHFLibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
-root4star -b -l -q RunPicoD0EventMaker.C\(\"$FILELIST\",\"Output_${JOBINDEX}.root\",2016,false\) &gt;&amp; First_2016_${JOBINDEX}.log
-echo ${SCRATCH}/Output_${JOBINDEX}.root.picoD0.root > TMPinput${JOBINDEX}.list
-root4star -b -l -q RunPicoD0AnaMaker.C\(\"TMPinput${JOBINDEX}.list\",\"$FILELIST\",\"D0_Output_2016_${JOBINDEX}.root\",2016,false\) &gt;&amp; Second_2016_${JOBINDEX}.log
+root4star -b -l -q RunPicoD0EventMaker.C\(\"$FILELIST\",\"Output_2014_${JOBINDEX}.root\",2014,false\) &gt;&amp; First_2014_${JOBINDEX}.log
+echo ${SCRATCH}/Output_2014_${JOBINDEX}.root.picoD0.root > TMPinput_2014_${JOBINDEX}.list
+root4star -b -l -q RunPicoD0AnaMaker.C\(\"TMPinput_2014_${JOBINDEX}.list\",\"$FILELIST\",\"D0_Output_2014_${JOBINDEX}.root\",2014,false\) &gt;&amp; Second_2014_${JOBINDEX}.log
 
 <!--\"$FILELIST\" -->
 <!--tar -zcvf ${JOBID}.log.tgz ${JOBID}.log -->

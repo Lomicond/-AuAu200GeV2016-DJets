@@ -32,7 +32,7 @@ void progres(double N, double D);
 
 
 void RunPicoTowerTest(string pico="TestLists/testPico_2016.list",
- string outFileName="Test_Tower.root",  int pYear = 2016, bool Testing = true)
+ string outFileName="Test_Tower.root",  int pYear = 2014, bool Testing = true)
 {
    //Check STAR Library. Please set SL_version to the original star library used in the production from http://www.star.bnl.gov/devcgi/dbProdOptionRetrv.pl
    string SL_version = "Unknown";

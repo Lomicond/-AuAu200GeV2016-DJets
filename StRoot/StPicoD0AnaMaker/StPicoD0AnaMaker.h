@@ -77,6 +77,7 @@ class StPicoD0AnaMaker : public StMaker
   void setMaxDcaZHadronCorr(float max);
     int getEntries() const;
     void setHadronCorr(float corr);
+    void setOnlyTrackBasedJets(bool onlyTrackBasedJets);
     void setHFCuts(StHFCuts* cuts);   
     void setCutETmin(float min); 
     ofstream fout1;
@@ -109,7 +110,7 @@ class StPicoD0AnaMaker : public StMaker
     bool isGoodEvent(int mYear);
     bool isMBTrigger(int mYear);
     bool  isGoodTrack(StPicoTrack const*) const;
-    bool  isGoodTrack2(StPicoTrack const*) const; //my
+    bool  isGoodJetTrack(StPicoTrack const*,StPicoEvent const*) const; //my
     bool  isGoodHadron(StPicoTrack const*) const;
     bool  isTpcPion(StPicoTrack const*) const;
     bool  isTpcKaon(StPicoTrack const*,StThreeVectorF const * pVtx) const;
@@ -143,6 +144,7 @@ class StPicoD0AnaMaker : public StMaker
     float fETmincut;
   // hadronic correction fraction
   float fHadronCorr;
+  float OnlyTrackBasedJets;
     // -------------- USER variables -------------------------
     // add your member variables here. 
     // Remember that ntuples size can be really big, use histograms where appropriate
@@ -166,7 +168,7 @@ class StPicoD0AnaMaker : public StMaker
     TH2D *massAngleLike;
     TH2D *massAngleUnlike;
     TNtuple* Jets;
-
+    TH2D* Jet_grefmult_pt_background;
    TH1F* mh1TotalEventsInRun;
    TH1F* mh1TotalHftTracksInRun;
    TH1F* mh1TotalGRefMultInRun;
@@ -253,5 +255,7 @@ inline void StPicoD0AnaMaker::setHFCuts(StHFCuts* cuts)
 { 
   mHFCuts = cuts; 
 }
+
+inline void StPicoD0AnaMaker::setOnlyTrackBasedJets(bool OTBJets)   { OnlyTrackBasedJets = OTBJets;}
 
 #endif

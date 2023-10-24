@@ -46,6 +46,14 @@ namespace mycuts
    extern float const kDca;
    extern float const pDca;
 
+   //Jet track cuts
+    extern float const jetTrackPtMin;
+    extern float const jetTrackPtMax;
+    extern float const jetTrackEta;
+    extern float const jetTracknHitsFit;
+    extern float const jetTracknHitsRatio; // nHitsFit/nHitsMax >= 0.52
+    extern float const jetTrackDCA;
+
    // histograms kaonPion pair cuts
    extern float const qaNHitsFit;
    extern float const qaNSigmaKaon;
