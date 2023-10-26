@@ -129,6 +129,12 @@ Int_t StPicoD0AnaMaker::Init()
   mh2InvariantMassVsPtUnlike = new TH2F("mh2InvariantMassVsPtUnlike","invariantMassVsPtUnlike;p_{T}(K#pi)(GeV/c);m_{K#pi}(GeV/c^{2})",120,0,12,220,0,2.2);
   mh2InvariantMassVsPtLike = new TH2F("mh2InvariantMassVsPtLike","invariantMassVsPtLike;p_{T}(K#pi)(GeV/c);m_{K#pi}(GeV/c^{2})",120,0,12,220,0,2.2);
 
+  //Event cuts, vytvořím histogram, kde se projeví nerůznější cuty o kolik snížili počet eventů
+  NEventsCuts = new TH1F("histogram", "Název histogramu;Název osy X;Název osy Y", 3, 0, 3);
+  NEventsCuts->GetXaxis()->SetBinLabel(1, "All events");
+  NEventsCuts->GetXaxis()->SetBinLabel(2, "Good events");
+  NEventsCuts->GetXaxis()->SetBinLabel(3, "Good D0");
+
   hpT_tr = new TH1F("hpT_tr","hpT_tr;p_{T}(GeV/c);",200,0,100);
   heta_phi_tr = new TH2F("heta_phi_tr","heta_phi_tr;#phi;#eta",120,0,12,50,0,0.05);
   heta_tr = new TH1F("heta_tr","heta_tr;#eta",50,-6,6);
@@ -215,6 +221,8 @@ Int_t StPicoD0AnaMaker::Finish()
   fout1.close();
   mOutputFile->cd();
   // save user variables here
+    NEventsCuts->Write();
+
   massPt->Write();
   massPtLike->Write();
     //massPtacut->Write();
@@ -302,11 +310,12 @@ Int_t StPicoD0AnaMaker::Make()
 
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
 
-  
+  NEventsCuts->Fill(0);
   if(!(isGoodEvent(mYear)))//minBias trigger requires
   {
      return kStOK;
   }
+
 
   if(!mGRefMultCorrUtil) {
     LOG_WARN << " No mGRefMultCorrUtil! Skip! " << endl;
@@ -324,12 +333,15 @@ Int_t StPicoD0AnaMaker::Make()
   //cout<<"This is a bad run from mGRefMultCorrUtil! Skip! " << endl;
   return kStOK;
   }
+
     mGRefMultCorrUtil->getWeight();
   int centrality  = mGRefMultCorrUtil->getCentralityBin9();
   if(centrality<0) {
     LOG_WARN << "not minBias sample!" << endl;
     return kStOK;
   }
+    NEventsCuts->Fill(1);
+
      pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
      vtxz->Fill(pVtx.z());
      vtxr->Fill(pVtx.x(),pVtx.y());
@@ -471,7 +483,7 @@ std::vector<FourMomentum> D0_fourmomentum;
   
   double pimass = 0.13957018;
   if(IsThereD0){
-
+      NEventsCuts->Fill(2);
       //Fast jet
       vector<fastjet::PseudoJet> input_particles;
       vector<fastjet::PseudoJet> chargedjetTracks;
@@ -999,8 +1011,16 @@ int StPicoD0AnaMaker::isD0Pair150(StKaonPion const* const kp) const
 int StPicoD0AnaMaker::isD0PairCentrality_pt(StKaonPion const* const kp, int Centrality, int mYear) const
 {
 
+
     StPicoTrack const* kaon = picoDst->track(kp->kaonIdx());
     StPicoTrack const* pion = picoDst->track(kp->pionIdx());
+
+
+    if(fabs(kaon->gMom().PseudoRapidity())>1 || fabs(pion->gMom().PseudoRapidity())>1)
+    {
+        return 0;
+    }
+
     bool pairCuts = false;
 
 /*
@@ -1150,7 +1170,7 @@ bool StPicoD0AnaMaker::isGoodJetTrack(StPicoTrack const * const trk,StPicoEvent 
     bool pTTrackJetCut = trk->gPt() > mycuts::jetTrackPtMin && trk->gPt() < mycuts::jetTrackPtMax;
     bool etaTrackJetCut = fabs(trk->gMom().PseudoRapidity()) < mycuts::jetTrackEta;
     bool nHitsTrackJetCut = trk->nHitsFit() >= mycuts::jetTracknHitsFit;
-    bool nHitsRatioTrackJetCut = (1.0*trk->nHitsFit()/trk->nHitsMax())>mycuts::jetTracknHitsRatio;
+    bool nHitsRatioTrackJetCut = (1.0*trk->nHitsFit()/trk->nHitsMax())>=mycuts::jetTracknHitsRatio;
     bool dcaTrackJetCut = fabs(trk->gDCA(myEvent->primaryVertex().x(),myEvent->primaryVertex().y(),myEvent->primaryVertex().z())) < mycuts::jetTrackDCA;
 
 return pTTrackJetCut && etaTrackJetCut && nHitsTrackJetCut && nHitsRatioTrackJetCut && dcaTrackJetCut;

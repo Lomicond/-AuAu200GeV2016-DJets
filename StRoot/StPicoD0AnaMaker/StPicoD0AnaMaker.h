@@ -183,6 +183,8 @@ class StPicoD0AnaMaker : public StMaker
    TH2F* mh2InvariantMassVsPtUnlike;
    TH2F* mh2InvariantMassVsPtLike;
 
+    TH1F* NEventsCuts;
+
  TH1F* hpT_tr;
  TH2F* heta_phi_tr;
  TH1F* heta_tr;
