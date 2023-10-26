@@ -130,7 +130,7 @@ Int_t StPicoD0AnaMaker::Init()
   mh2InvariantMassVsPtLike = new TH2F("mh2InvariantMassVsPtLike","invariantMassVsPtLike;p_{T}(K#pi)(GeV/c);m_{K#pi}(GeV/c^{2})",120,0,12,220,0,2.2);
 
   //Event cuts, vytvořím histogram, kde se projeví nerůznější cuty o kolik snížili počet eventů
-  NEventsCuts = new TH1F("histogram", "Název histogramu;Název osy X;Název osy Y", 3, 0, 3);
+  NEventsCuts = new TH1F("NEventsCuts", "NEventsCuts;Cuts;Count", 3, 0, 3);
   NEventsCuts->GetXaxis()->SetBinLabel(1, "All events");
   NEventsCuts->GetXaxis()->SetBinLabel(2, "Good events");
   NEventsCuts->GetXaxis()->SetBinLabel(3, "Good D0");
