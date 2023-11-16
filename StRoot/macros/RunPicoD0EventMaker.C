@@ -131,7 +131,7 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
       }
       cout << "│ " << flush;
       if(citatel!=jmenovatel){
-         cout << Form("Completed: %.2f ",citatel/jmenovatel*100.)<<"%"<<flush;
+         cout << Form("Completed: %.2f ",citatel/jmenovatel*100.)<<"% "<<flush;
       }
                
       else{
