@@ -16,7 +16,7 @@ To test the second part, following the next steps. It will take ~8mins
 ------------------------------------------
 starver SL20c
 cons
-root4star -l -b -q RunPicoD0EventMaker.C
+root4star -l -b -q RunPicoD0AnaMaker.C
 
 ==========================================
 To test the third part, following the next steps. It will take ~8mins

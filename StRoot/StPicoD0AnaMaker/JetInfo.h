@@ -16,7 +16,7 @@ Some additional info and functions for the analysis
 
 
 //#include "../StPicoJetMaker/StPicoJetMaker.h"
-#include "../StRefMultCorr/StRefMultCorr.h"
+#include "StRefMultCorr/StRefMultCorr.h"
 
 #include "TVector3.h"
 #include "TLorentzVector.h"
@@ -285,13 +285,13 @@ vector<PseudoJet> EmbedJet(short jetType, float &pT_emb, float maxRapJet /*was f
       TLorentzVector partonlv(0, 0, 0, 0);
       partonlv.SetPtEtaPhiE(pT_emb, eta_parton, phi_parton, E);
 
-      Int_t final = pythia->ImportParticles(simarr, "Final");
+      //Int_t final = pythia->ImportParticles(simarr, "Final");
       Int_t nparticles = simarr->GetEntries();
      //cout<<"npart: "<<nparticles<<endl; 
       //TLorentzVector conelvPart; //particle level jet vector
   		TLorentzVector partlv; //particle level jet constituent vector
 
-      Int_t goodparpart = 0;
+     // Int_t goodparpart = 0;
 		TLorentzVector foundlv(0., 0., 0., 0.);
       for(Int_t ipart = 0; ipart < nparticles; ipart++)
 		{
@@ -313,8 +313,8 @@ vector<PseudoJet> EmbedJet(short jetType, float &pT_emb, float maxRapJet /*was f
          }
 
 	  		Double_t eta = partlv.Eta();
-		  	Double_t phi = partlv.Phi();
-			Double_t M = 0;
+		  	//Double_t phi = partlv.Phi();
+			//Double_t M = 0;
 
 	  		//conelvPart += partlv;
 			PseudoJet embeddedParticle=PseudoJet(partlv.Px(), partlv.Py(), partlv.Pz(), partlv.E());

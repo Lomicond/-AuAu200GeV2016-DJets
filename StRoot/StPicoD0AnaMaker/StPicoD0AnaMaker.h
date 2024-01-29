@@ -66,6 +66,21 @@ class StBemcTables;
 
 class StPicoD0AnaMaker : public StMaker
 {
+  private:
+
+    TString mOutFileName;
+    TChain* mChain;
+    int mEventCounter;
+    StPicoDstMaker* mPicoDstMaker;
+    int mYear;
+    StPicoDst *picoDst;
+    TString mInputFileList;
+    TFile* mOutputFile;
+    StPicoD0Event* mPicoD0Event;
+    StPicoPrescales* mPrescales;
+    StRefMultCorr* mGRefMultCorrUtil;
+    StHFCuts* mHFCuts;
+
   public:
     StPicoD0AnaMaker(
             char const * name,
@@ -99,7 +114,7 @@ class StPicoD0AnaMaker : public StMaker
     StBemcTables     *mTables;
 
   private:
-    int mYear;
+
     StPicoD0AnaMaker() {}
     void readNextEvent();
     ofstream fout;
@@ -114,19 +129,10 @@ class StPicoD0AnaMaker : public StMaker
     float getTofBeta(StPicoTrack const*,StThreeVectorF const * pVtx,StPicoDst const* const picoDst) const;
     bool IsBadEnergyRun(int);
 
-    StPicoDstMaker* mPicoDstMaker;
-    StPicoD0Event* mPicoD0Event;
-    StPicoPrescales* mPrescales;
-    StRefMultCorr* mGRefMultCorrUtil;
-    StPicoDst *picoDst;
-    StHFCuts* mHFCuts;
-    TChain* mChain;
 
-    TString mOutFileName;
-    TString mInputFileList;
-    TFile* mOutputFile;
 
-    int mEventCounter;
+
+
     float fGhostMaxrap;
     int nJetsRemove;
     float maxneutralfrac;
@@ -173,9 +179,13 @@ class StPicoD0AnaMaker : public StMaker
 
     //Jet backround
     TH2D* Jet_grefmult_pt_background;
+    TH2D* Jet_D0pT_vs_D0rapidity;
+    TH2D* Jet_D0pT_vs_Jetrapidity;
+    TH1D* Jet_phi;
 
     //TNtuple D0-jets
     TNtuple* Jets;
+    TNtuple* Jets2;
 
     //2D D0 mass-pt like-sign and unlike-sign histograms
     TH2D *massPt;

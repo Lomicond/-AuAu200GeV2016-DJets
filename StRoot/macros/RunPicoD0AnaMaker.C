@@ -11,6 +11,7 @@
 #include "TChain.h"
 #include "StChain/StMaker.h"
 #include "StChain/StChain.h"
+#include "StRefMultCorr/CentralityMaker.h"
 #include "StRefMultCorr/StRefMultCorr.h"
 #include "StPicoD0AnaMaker/StPicoD0AnaMaker.h"
 #include "St_db_Maker/St_db_Maker.h"

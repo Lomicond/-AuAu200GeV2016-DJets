@@ -149,14 +149,17 @@ Int_t StPicoD0AnaMaker::Init()
 
   //Jet background
   Jet_grefmult_pt_background = new TH2D("Jet_rho_vs_grefmult","Jet_rho_vs_grefmult;grefmult; p_{T} (GeV/c)",1000,0,1000,100,-1,32);
+  Jet_D0pT_vs_D0rapidity = new TH2D("Jet_D0pT_vs_D0rapidity","Jet_D0pT_vs_D0rapidity;rapidity; p_{T} (GeV/c)",100,-1.5,1.5,100,0,10);
+  Jet_D0pT_vs_Jetrapidity = new TH2D("Jet_D0pT_vs_JetRapidity","Jet_D0pT_vs_JetRapidity;rapidity; p_{T} (GeV/c)",100,-1.5,1.5,100,0,10);
+  Jet_phi = new TH1D("Jet_phi","Jet_phi;#phi;",40,-6.2830,6.2830);
 
   //TNtuple D0-jets
-  Jets = new TNtuple("Jets", "Jets", "RunId:centrality:NJet:pseudorapidity:jet_phi:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:z");
+  Jets = new TNtuple("Jets", "Jets", "RunId:centrality:centr_weight:NJet:pseudorapidity:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:z");
       //RunId: sgn(RunID) = 1 -> D0, sgn(RunID) = -1 -> antiD0
       //Centrality: 0 -> 70-80%, 1 -> 60-70%, 2 -> 50-60%, 3 -> 40-50%, 4 -> 30-40%, 5 -> 20-30%, 6 -> 10-20%, 7 -> 5-10%, 8 -> 0-5%
+      //Centr_weight: centrality weight
       //NJet: Number of D0 in one events.
       //pseudorapidity: pseudorapidity of D0-jet
-      //jet_phi: phi of D0-jet
       //jet_pt: pt of D0-jet
       //jet_pt_corr: pt of D0-jet after the background subtraction
       //D0mass: mass of D0
@@ -168,7 +171,18 @@ Int_t StPicoD0AnaMaker::Init()
       //lambda_1_3: angularity kappa=1 and alpha=3 after the background subtraction
       //z: z of D0-jet after the background subtraction
 
-  //Bin size of 2D D0 mass-pt like-sign and unlike-sign histograms
+  //TNtuple additional info
+  Jets2 = new TNtuple("Jets2", "Jets2", "centrality:centr_weight:jet_phi:grefmult:bg_dens:jet_area:jet_rap");
+        // Centrality: centrality
+        // centr_weight: centrality weight
+        // jet_phi: phi of D0-jet
+        // grefmult: grefmult
+        // bg_dens: background density
+        // Jet_area: area of D0-jet
+        // jet_rap: rapidity of D0-jet
+
+
+    //Bin size of 2D D0 mass-pt like-sign and unlike-sign histograms
   const int xbinSize=100;
   float binMass[2001];
 
@@ -187,9 +201,6 @@ Int_t StPicoD0AnaMaker::Init()
   assert(mADCtoEMaker);
   mTables = mADCtoEMaker->getBemcData()->getTables();
 
-  //Loading of multiplicity correction
-  mGRefMultCorrUtil = new StRefMultCorr("grefmult");
-
   return kStOK;
 }
 
@@ -202,7 +213,7 @@ StPicoD0AnaMaker::~StPicoD0AnaMaker(){
 //-----------------------------------------------------------------------------
 struct FourMomentum {
   //Four-momentum of the reconstructed particle
-  double E, px, py, pz, D0_antiD0;
+  double E, px, py, pz, D0_antiD0, D0Mass;
   // D0_antiD0: 1 -> D0, -1 -> antiD0
 };
 
@@ -260,6 +271,9 @@ Int_t StPicoD0AnaMaker::Finish(){
 
   //Jet background
   Jet_grefmult_pt_background->Write();
+  Jet_D0pT_vs_D0rapidity->Write();
+  Jet_D0pT_vs_Jetrapidity->Write();
+  Jet_phi->Write();
 
   //2D D0 mass-pt like-sign and unlike-sign histograms
   massPt->Write();
@@ -267,6 +281,7 @@ Int_t StPicoD0AnaMaker::Finish(){
 
   //TNtuple D0-jets
   Jets->Write();
+  Jets2->Write();
 
   //Closing of the output file
   mOutputFile->Close();
@@ -316,6 +331,9 @@ Int_t StPicoD0AnaMaker::Make()
   //Loading of the event
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
 
+  //Loading of the primary vertex
+  pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
+
   //NEventsCuts: All events
   NEventsCuts->Fill(0);
 
@@ -350,16 +368,13 @@ Int_t StPicoD0AnaMaker::Make()
   //NEventsCuts: Centrality
   NEventsCuts->Fill(6);
 
-  //Loading of the primary vertex
-  pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
-
   //Filling events histograms
   vtxz->Fill(pVtx.z());
   vtxr->Fill(pVtx.x(),pVtx.y());
   hcentr->Fill(centrality);
 
   //Loading event information
-  int eventID = mPicoD0Event->eventId();
+  //int eventID = mPicoD0Event->eventId();
   int RunId = mPicoD0Event->runId();
 
   //Loading of the number of tracks in the event
@@ -435,9 +450,6 @@ Int_t StPicoD0AnaMaker::Make()
         //If pair is Unlike-sign
         if(charge==-1){
 
-            //If the mass is in the D0 mass window, the event is noted
-            if(dMass>1.81&&dMass<1.91) IsThereD0 = true;
-
             //Filling of the D0 histograms
             massPt->Fill(dMass,d0Pt,reweight*reweight_eff);
             D0etaunlike->Fill(kp->eta());
@@ -446,9 +458,16 @@ Int_t StPicoD0AnaMaker::Make()
             DaughterPionTrackVector.push_back(pion->id());
             DaughterKaonTrackVector.push_back(kaon->id());
 
-            //Saving of D0 four-momenta // E,       px,       py,        pz,         D0_antiD0;
-            FourMomentum D0_actual = {kp->Energy(), kp->Px(), kp->Py(),  kp->Pz(), pion->charge()};
-            D0_fourmomentum.push_back(D0_actual);
+            //Check ff the mass is in the D0 mass window
+            //if(dMass>1.81&&dMass<1.91){
+
+                //The event is noted
+                IsThereD0 = true;
+
+                //Saving of D0 four-momenta // E,       px,       py,        pz,         D0_antiD0,            D0 mass;
+                FourMomentum D0_actual = {kp->Energy(), kp->Px(), kp->Py(),  kp->Pz(), (double)pion->charge(), dMass};
+                D0_fourmomentum.push_back(D0_actual);
+            //}
 
             //Loading of the rescaled RunID
             int runIndex = mPrescales->runIndex(mPicoD0Event->runId());
@@ -506,7 +525,7 @@ Int_t StPicoD0AnaMaker::Make()
       //Loop over all D0 candidates in the event.
       //If there are more than one, the jet reconstruction is done for each D0 candidate separately
       //ignoring the other not reconstructed D0 candidates in the event.
-      for (int nD0 = 0; nD0 < D0_fourmomentum.size(); nD0++) {
+      for (unsigned int nD0 = 0; nD0 < D0_fourmomentum.size(); nD0++) {
 
 //-----------D0-track--------------------------------------------------------
 
@@ -517,8 +536,8 @@ Int_t StPicoD0AnaMaker::Make()
         //It cannot be -1 or 1 because the default flag in FastJet is -1.
         pj.set_user_index(D0_fourmomentum[nD0].D0_antiD0*2);
 
-              //Add the D0 candidate to the inclusive particle vector
-              input_particles.push_back(pj);
+        //Add the D0 candidate to the inclusive particle vector
+        input_particles.push_back(pj);
 
 //-----------Neutral-tracks--------------------------------------------------
 
@@ -676,11 +695,11 @@ Int_t StPicoD0AnaMaker::Make()
         //Contrary to the inclusive jets, the background jets are reconstructed with the kt algorithm (recommended choice)
         JetDefinition jet_def_bkgd(kt_algorithm, R);
 
-        //Definition of the area for background estimation
+        //Definition of the area for background estimation626
         AreaDefinition area_def_bkgd(active_area_explicit_ghosts,GhostedAreaSpec(fGhostMaxrap, 1, 0.01));
 
         //Remove two hardest jets in central collisions, one in others
-        if (centrality == 0 || centrality == 1) nJetsRemove = 2;
+        if (centrality == 7 || centrality == 8) nJetsRemove = 2;
 
         //Definition of the selector for background estimation (eta and pt cut + remove the n hardest jets)
         Selector selector = SelectorAbsEtaMax(1.0) * (!SelectorNHardest(nJetsRemove)) * SelectorPtMin(0.01);
@@ -693,7 +712,7 @@ Int_t StPicoD0AnaMaker::Make()
 
         //Calculation of the rho (median) and sigma (fluctuations of the median) for the background
         float rho = bkgd_estimator.rho();
-        float rho_sigma = bkgd_estimator.sigma();
+        //float rho_sigma = bkgd_estimator.sigma();
 
 //-----------Jet-reconstruction-and-variable-calculations----------------------------
 
@@ -796,17 +815,17 @@ Int_t StPicoD0AnaMaker::Make()
             //If the jet contains D0
             if (abs(user_index) ==2){
 
-                //Calculation of the D0 mass (m=sqrt(E^2-px^2-py^2-pz^2)
-                double D0mass = sqrt(D0_fourmomentum[nD0].E*D0_fourmomentum[nD0].E-D0_fourmomentum[nD0].px*D0_fourmomentum[nD0].px-D0_fourmomentum[nD0].py*D0_fourmomentum[nD0].py-D0_fourmomentum[nD0].pz*D0_fourmomentum[nD0].pz);
+                //Calculation of the D0 mass
+                double D0mass = D0_fourmomentum[nD0].D0Mass;
                 //Calculation of the D0 pT (pT=sqrt(px^2+py^2))
                 double D0_pT = sqrt(D0_fourmomentum[nD0].px*D0_fourmomentum[nD0].px+D0_fourmomentum[nD0].py*D0_fourmomentum[nD0].py);
 
                 //Fill the TNtuple
                 Jets->Fill( RunId*user_index/2.,                      //EventID, positive for D0, negative for antiD0
                             centrality,                               //Centrality
+                            reweight,                                 //Centrality reweighting factor
                             D0_fourmomentum.size(),                   //Number of D0 in the event
                             inclusive_jets[i].pseudorapidity(),       //Jet eta
-                            inclusive_jets[i].phi(),                  //Jet phi
                             pT_jet,                                   //Jet pT
                             pT_jet_corr,                              //Jet pT after background subtraction
                             D0mass,                                   //D0 mass
@@ -819,8 +838,24 @@ Int_t StPicoD0AnaMaker::Make()
                             zet                                       //z-value
                             );
 
+                Jets2->Fill(    centrality,                           //Centrality
+                                reweight,                             //Centrality reweighting factor
+                                inclusive_jets[i].phi(),              //Jet phi
+                                picoDst->event()->grefMult(),         //grefMult
+                                rho,                                  //density of the background
+                                inclusive_jets[i].area(),             //area of the jet
+                                inclusive_jets[i].rap()               //rapidity of the jet
+                                );
+
+
                 //Fill the histogram (pt vs background density)
                 Jet_grefmult_pt_background->Fill(picoDst->event()->grefMult(),rho);
+                //Rapidity calculations and filling histogram
+                double D0_rapidity = 1./2.*log((D0_fourmomentum[nD0].E+D0_fourmomentum[nD0].pz)/(D0_fourmomentum[nD0].E-D0_fourmomentum[nD0].pz));
+                Jet_D0pT_vs_D0rapidity->Fill(D0_rapidity,D0_pT);
+                Jet_D0pT_vs_Jetrapidity->Fill(inclusive_jets[i].rapidity(),D0_pT);
+                Jet_phi->Fill(inclusive_jets[i].phi());
+
 
                 //Print colorfully the D0-jet information
                 /*printf("\033[32m%5u %15.8f %15.8f %15.8f %15d\033[0m\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);*/
@@ -904,7 +939,7 @@ Bool_t StPicoD0AnaMaker::GetCaloTrackMomentum(StPicoDst *mPicoDst, TVector3 mPri
       //Exclude tracks outside of the TPC acceptance
       if (fabs(eta) > 1) continue;
       //Loading of phi
-      float phi = gMom.Phi();
+      //float phi = gMom.Phi();
 
       //Loading of the number of hits
       float nHitsFit = trk->nHitsFit();
@@ -986,7 +1021,7 @@ Double_t StPicoD0AnaMaker::GetTowerCalibEnergy(Int_t TowerId){
 bool StPicoD0AnaMaker::IsBadEnergyRun(int runID) {
     // Check if the run is in the list of BEMC bad runs
 
-    for (int i = 0; i < sizeof(EnergyBadRunList)/sizeof(EnergyBadRunList[0]); i++) {
+    for (unsigned int i = 0; i < sizeof(EnergyBadRunList)/sizeof(EnergyBadRunList[0]); i++) {
         if (EnergyBadRunList[i] == runID) {
             return true;
         }
