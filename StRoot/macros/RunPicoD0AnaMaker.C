@@ -53,7 +53,7 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
       exit(0);
    }
 
-   int nEntries = 10000;
+   int nEntries = 20000;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);

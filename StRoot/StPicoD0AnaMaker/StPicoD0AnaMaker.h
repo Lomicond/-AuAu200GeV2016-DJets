@@ -146,6 +146,7 @@ class StPicoD0AnaMaker : public StMaker
     TH1F *vtxz;
     TH2D *vtxr;
     TH1D *hcentr;
+    TH1D *hcentrW;
     TH1F* NEventsCuts;
     TH1F* mh1TotalEventsInRun;
     TH1F* mh1TotalHftTracksInRun;
@@ -184,8 +185,9 @@ class StPicoD0AnaMaker : public StMaker
     TH1D* Jet_phi;
 
     //TNtuple D0-jets
+    Float_t TupleVariables[24];
     TNtuple* Jets;
-    TNtuple* Jets2;
+    std::map<std::string, int> VariableJets;
 
     //2D D0 mass-pt like-sign and unlike-sign histograms
     TH2D *massPt;

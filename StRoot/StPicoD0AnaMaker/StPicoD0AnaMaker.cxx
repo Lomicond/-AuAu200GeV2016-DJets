@@ -108,6 +108,7 @@ Int_t StPicoD0AnaMaker::Init()
   vtxz = new TH1F("vtxz",";PVtx.z() [cm]; Count",100,-10,10);
   vtxr = new TH2D("vtxr",";PVtx.x() [cm]; PVtx.y() [cm]",100,-3,3,100,-3,3);
   hcentr = new TH1D("hcentr",";C_{ID}",9,-0.5,8.5);
+  hcentrW = new TH1D("hcentrW",";C_{ID}",9,-0.5,8.5);
   NEventsCuts = new TH1F("NEventsCuts", "NEventsCuts;Cuts;Count", 9, 0, 9);
       NEventsCuts->GetXaxis()->SetBinLabel(1, "All events");
       NEventsCuts->GetXaxis()->SetBinLabel(2, "Triggers");
@@ -153,36 +154,38 @@ Int_t StPicoD0AnaMaker::Init()
   Jet_D0pT_vs_Jetrapidity = new TH2D("Jet_D0pT_vs_JetRapidity","Jet_D0pT_vs_JetRapidity;rapidity; p_{T} (GeV/c)",100,-1.5,1.5,100,0,10);
   Jet_phi = new TH1D("Jet_phi","Jet_phi;#phi;",40,-6.2830,6.2830);
 
+
   //TNtuple D0-jets
-  Jets = new TNtuple("Jets", "Jets", "RunId:centrality:centr_weight:NJet:pseudorapidity:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:z");
-      //RunId: sgn(RunID) = 1 -> D0, sgn(RunID) = -1 -> antiD0
-      //Centrality: 0 -> 70-80%, 1 -> 60-70%, 2 -> 50-60%, 3 -> 40-50%, 4 -> 30-40%, 5 -> 20-30%, 6 -> 10-20%, 7 -> 5-10%, 8 -> 0-5%
-      //Centr_weight: centrality weight
-      //NJet: Number of D0 in one events.
-      //pseudorapidity: pseudorapidity of D0-jet
-      //jet_pt: pt of D0-jet
-      //jet_pt_corr: pt of D0-jet after the background subtraction
-      //D0mass: mass of D0
-      //D0_r: r of D0
-      //D0_pT: pt of D0
-      //lambda_1_1: angularity kappa=1 and alpha=1 after the background subtraction
-      //lambda_1_1half: angularity kappa=1 and alpha=1.5 after the background subtraction
-      //lambda_1_2: angularity kappa=1 and alpha=2 after the background subtraction
-      //lambda_1_3: angularity kappa=1 and alpha=3 after the background subtraction
-      //z: z of D0-jet after the background subtraction
+  Jets = new TNtuple("Jets", "Jets", "RunId:centrality:centr_weight:NJet:pseudorapidity:jet_phi:grefmult:bg_dens:jet_area:jet_rap:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_0half:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:lambda_2_0:z:NConst:NpTfraction");
 
-  //TNtuple additional info
-  Jets2 = new TNtuple("Jets2", "Jets2", "centrality:centr_weight:jet_phi:grefmult:bg_dens:jet_area:jet_rap");
-        // Centrality: centrality
-        // centr_weight: centrality weight
-        // jet_phi: phi of D0-jet
-        // grefmult: grefmult
-        // bg_dens: background density
-        // Jet_area: area of D0-jet
-        // jet_rap: rapidity of D0-jet
+VariableJets = {
+    {"RunId", 0},          // sgn(RunID) = 1 -> D0, sgn(RunID) = -1 -> antiD0
+    {"centrality", 1},     // 0 -> 70-80%, 1 -> 60-70%, 2 -> 50-60%, 3 -> 40-50%, 4 -> 30-40%, 5 -> 20-30%, 6 -> 10-20%, 7 -> 5-10%, 8 -> 0-5%
+    {"centr_weight", 2},   // centrality weight
+    {"NJet", 3},           // Number of D0 in one event
+    {"pseudorapidity", 4}, // pseudorapidity of D0-jet
+    {"jet_phi", 5},        // phi of D0-jet
+    {"grefmult", 6},       // grefmult
+    {"bg_dens", 7},        // background density
+    {"jet_area", 8},       // area of D0-jet
+    {"jet_rap", 9},        // rapidity of D0-jet
+    {"jet_pt", 10},        // pt of D0-jet
+    {"jet_pt_corr", 11},   // pt of D0-jet after background subtraction
+    {"D0mass", 12},        // mass of D0
+    {"D0_r", 13},          // r of D0
+    {"D0_pT", 14},         // pt of D0
+    {"lambda_1_0half", 15},// angularity kappa=1 and alpha=0.5 after background subtraction
+    {"lambda_1_1", 16},    // angularity kappa=1 and alpha=1 after background subtraction
+    {"lambda_1_1half", 17},// angularity kappa=1 and alpha=1.5 after background subtraction
+    {"lambda_1_2", 18},    // angularity kappa=1 and alpha=2 after background subtraction
+    {"lambda_1_3", 19},    // angularity kappa=1 and alpha=3 after background subtraction
+    {"lambda_2_0", 20},    // angularity kappa=2 and alpha=0 after background subtraction
+    {"z", 21},             // z of D0-jet after background subtraction
+    {"NConst", 22},        // Number of constituents
+    {"NpTfraction", 23}   // Neutral pT fraction of D0-jet
+};
 
-
-    //Bin size of 2D D0 mass-pt like-sign and unlike-sign histograms
+  //Bin size of 2D D0 mass-pt like-sign and unlike-sign histograms
   const int xbinSize=100;
   float binMass[2001];
 
@@ -239,6 +242,7 @@ Int_t StPicoD0AnaMaker::Finish(){
   vtxz->Write();
   vtxr->Write();
   hcentr->Write();
+  hcentrW->Write();
   NEventsCuts->Write();
   mh1TotalEventsInRun->Write();
   mh1TotalGRefMultInRun->Write();
@@ -281,7 +285,6 @@ Int_t StPicoD0AnaMaker::Finish(){
 
   //TNtuple D0-jets
   Jets->Write();
-  Jets2->Write();
 
   //Closing of the output file
   mOutputFile->Close();
@@ -319,6 +322,7 @@ Int_t StPicoD0AnaMaker::Make()
     LOG_ERROR <<" StPicoD0AnaMaker - SOMETHING TERRIBLE JUST HAPPENED. StPicoEvent and StPicoD0Event are not in sync."<<endm;
     exit(1);
   }
+
 
   // -------------- USER ANALYSIS -------------------------
 
@@ -368,10 +372,14 @@ Int_t StPicoD0AnaMaker::Make()
   //NEventsCuts: Centrality
   NEventsCuts->Fill(6);
 
+  //Loading of the weight for the centrality correction
+  double reweight = mGRefMultCorrUtil->getWeight();
+
   //Filling events histograms
   vtxz->Fill(pVtx.z());
   vtxr->Fill(pVtx.x(),pVtx.y());
   hcentr->Fill(centrality);
+  hcentrW->Fill(centrality,reweight);
 
   //Loading event information
   //int eventID = mPicoD0Event->eventId();
@@ -392,9 +400,6 @@ Int_t StPicoD0AnaMaker::Make()
 
   //Preparation of the four-vector of the D0 candidates
   std::vector<FourMomentum> D0_fourmomentum;
-
-  //Loading of the weight for the centrality correction
-  double reweight = mGRefMultCorrUtil->getWeight();
 
   //For cyklus of all raw D0 candidates
   for (int idx = 0; idx < aKaonPion->GetEntries(); ++idx){
@@ -670,6 +675,8 @@ Int_t StPicoD0AnaMaker::Make()
                 //                       px,       py,               pz,                                 E = sqrt(p^2 + m^2),
                 fastjet::PseudoJet pj(trk->gMom().x(),trk->gMom().y(),trk->gMom().z(), sqrt(trk->gMom().Mag()*trk->gMom().Mag()+pimass*pimass));
 
+		//Set the flag to 3 if the particle is charged
+		pj.set_user_index(3);
                 //Add the charged particle to the charged particle vector
                 chargedjetTracks.push_back(pj);
                 //Add the charged particle to the inclusive particle vector
@@ -703,6 +710,7 @@ Int_t StPicoD0AnaMaker::Make()
 
         //Definition of the selector for background estimation (eta and pt cut + remove the n hardest jets)
         Selector selector = SelectorAbsEtaMax(1.0) * (!SelectorNHardest(nJetsRemove)) * SelectorPtMin(0.01);
+        //1-R???
 
         //Definition of the background estimator
         JetMedianBackgroundEstimator bkgd_estimator(selector, jet_def_bkgd, area_def_bkgd);
@@ -741,21 +749,29 @@ Int_t StPicoD0AnaMaker::Make()
         for (unsigned int i = 0; i < inclusive_jets.size(); i++) {
 
             //Exclude jets with |eta| > 1 - R
-            if (abs(inclusive_jets[i].pseudorapidity()) > (1.0 - R)) continue;
+            ////if (abs(inclusive_jets[i].pseudorapidity()) > (1.0 - R)) continue; Postponed to local analysis
+
+	    //Constituent counter
+	    int ConstCounter = 0;
 
             //Initialize the variables (angularities, z-value)
             int user_index = 0;
             double Delta_R_D0 = 0;
+            double lambda_alpha_0 = 0.;
+            double lambda_alpha_0half = 0.5;
             double lambda_alpha_1 = 1.;
             double lambda_alpha_1half = 1.5;
             double lambda_alpha_2 = 2.;
             double lambda_alpha_3 = 3.;
-            double lambda_kappa = 1.;
+            double lambda_kappa_1 = 1.;
+            double lambda_kappa_2 = 2.;
             double zet = 0;
+            double lambda_1_0half = 0;
             double lambda_1_1 = 0;
             double lambda_1_1half = 0;
             double lambda_1_2 = 0;
             double lambda_1_3 = 0;
+            double lambda_2_0 = 0;
             double neutralpT = 0;
 
             //Calculate the jet pT + background subtraction (= _corr)
@@ -774,21 +790,29 @@ Int_t StPicoD0AnaMaker::Make()
             //Loop over all constituents of the i-th jet
             for (vector<fastjet::PseudoJet>::const_iterator particle = constituents.begin(); particle != constituents.end(); ++particle) {
 
-                //Fraction of neutral particles
-                if (particle->user_index() == 10) neutralpT += particle->pt();
-
                 //Loading of the particle index
                 int index = particle->user_index();
-
+                
+                //Number of constituents (+-2 = D0, 3 = charged, 10 = neutral, -1 ghost)
+                if (index == -1) continue;
+                
+                //Constituent counter
+                ConstCounter++;
+                
+                //Fraction of neutral particles
+                if (index == 10) neutralpT += particle->pt();
+                
                 //Calculating the delta R = sqrt(delta eta^2 + delta phi^2)
                 double Delta_R =delta_R(inclusive_jets[i].eta(),inclusive_jets[i].phi(),particle->eta(),particle->phi());
 
                 //Angularities are calculated only for track based particles (charged + D0)
                 if (particle->user_index() != 10) {
-                    lambda_1_1+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1);
-                    lambda_1_1half+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_1half);
-                    lambda_1_2+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_2);
-                    lambda_1_3+=pow(particle->pt()/pT_jet_corr,lambda_kappa)*pow( Delta_R /jet_def.R() ,lambda_alpha_3);
+                    lambda_1_0half+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_0half);
+                    lambda_1_1+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_1);
+                    lambda_1_1half+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_1half);
+                    lambda_1_2+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_2);
+                    lambda_1_3+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_3);
+ 		    lambda_2_0+=pow(particle->pt()/pT_jet_corr,lambda_kappa_2)*pow( Delta_R /jet_def.R() ,lambda_alpha_0);
                 }
 
                 //Check if the constituent is D0 (D0 = 2, antiD0 = -2)
@@ -810,7 +834,9 @@ Int_t StPicoD0AnaMaker::Make()
             double nfraction = neutralpT/pT_jet;
 
             //If the fraction is too high, jet is rejected (Parameter is saved in RunPicoD0AnaMaker.C as setMaxNeutralFraction)
-            if (nfraction > maxneutralfrac) continue;
+            ////if (nfraction > maxneutralfrac) continue; //Postponed to local analysis
+            
+            //if (area_jet < fAcuts) continue; //Not implemented
 
             //If the jet contains D0
             if (abs(user_index) ==2){
@@ -821,32 +847,33 @@ Int_t StPicoD0AnaMaker::Make()
                 double D0_pT = sqrt(D0_fourmomentum[nD0].px*D0_fourmomentum[nD0].px+D0_fourmomentum[nD0].py*D0_fourmomentum[nD0].py);
 
                 //Fill the TNtuple
-                Jets->Fill( RunId*user_index/2.,                      //EventID, positive for D0, negative for antiD0
-                            centrality,                               //Centrality
-                            reweight,                                 //Centrality reweighting factor
-                            D0_fourmomentum.size(),                   //Number of D0 in the event
-                            inclusive_jets[i].pseudorapidity(),       //Jet eta
-                            pT_jet,                                   //Jet pT
-                            pT_jet_corr,                              //Jet pT after background subtraction
-                            D0mass,                                   //D0 mass
-                            Delta_R_D0,                               //Delta R between D0 and jet axis
-                            D0_pT,                                    //D0 pT
-                            lambda_1_1,                               //Angularity lambda_1_1
-                            lambda_1_1half,                           //Angularity lambda_1_1.5
-                            lambda_1_2,                               //Angularity lambda_1_2
-                            lambda_1_3,                               //Angularity lambda_1_3
-                            zet                                       //z-value
-                            );
+		TupleVariables[VariableJets["RunId"]] = RunId * user_index / 2.;             		// EventID, positive for D0, negative for antiD0
+		TupleVariables[VariableJets["centrality"]] = centrality;                    		// Centrality
+		TupleVariables[VariableJets["centr_weight"]] = reweight;                    		// Centrality reweighting factor
+		TupleVariables[VariableJets["NJet"]] = D0_fourmomentum.size();              		// Number of D0 in the event
+		TupleVariables[VariableJets["pseudorapidity"]] = inclusive_jets[i].pseudorapidity(); 	// Jet eta  
+		TupleVariables[VariableJets["jet_phi"]] = inclusive_jets[i].phi();         		// Jet phi
+		TupleVariables[VariableJets["grefmult"]] = picoDst->event()->grefMult();    		// grefMult
+		TupleVariables[VariableJets["bg_dens"]] = rho;                               		// density of the background
+		TupleVariables[VariableJets["jet_area"]] = inclusive_jets[i].area();         		// area of the jet
+		TupleVariables[VariableJets["jet_rap"]] = inclusive_jets[i].rap();           		// rapidity of the jet
+		TupleVariables[VariableJets["jet_pt"]] = pT_jet;                             		// Jet pT
+		TupleVariables[VariableJets["jet_pt_corr"]] = pT_jet_corr;                   		// Jet pT after background subtraction
+		TupleVariables[VariableJets["D0mass"]] = D0mass;                             		// D0 mass
+		TupleVariables[VariableJets["D0_r"]] = Delta_R_D0;                           		// Delta R between D0 and jet axis
+		TupleVariables[VariableJets["D0_pT"]] = D0_pT;                               		// D0 pT
+		TupleVariables[VariableJets["lambda_1_0half"]] = lambda_1_0half;             		// Angularity lambda_1_0.5
+		TupleVariables[VariableJets["lambda_1_1"]] = lambda_1_1;                     		// Angularity lambda_1_1
+		TupleVariables[VariableJets["lambda_1_1half"]] = lambda_1_1half;             		// Angularity lambda_1_1.5
+		TupleVariables[VariableJets["lambda_1_2"]] = lambda_1_2;                     		// Angularity lambda_1_2
+		TupleVariables[VariableJets["lambda_1_3"]] = lambda_1_3;                     		// Angularity lambda_1_3
+		TupleVariables[VariableJets["lambda_2_0"]] = lambda_2_0;                     		// Angularity lambda_2_0
+		TupleVariables[VariableJets["z"]] = zet;                                     		// zet
+		TupleVariables[VariableJets["NConst"]] = ConstCounter; 					// Number of constituents
+		TupleVariables[VariableJets["NpTfraction"]] = nfraction;                     		// Neutral pT fraction
 
-                Jets2->Fill(    centrality,                           //Centrality
-                                reweight,                             //Centrality reweighting factor
-                                inclusive_jets[i].phi(),              //Jet phi
-                                picoDst->event()->grefMult(),         //grefMult
-                                rho,                                  //density of the background
-                                inclusive_jets[i].area(),             //area of the jet
-                                inclusive_jets[i].rap()               //rapidity of the jet
-                                );
-
+                //Fill the array to TNtuple                
+                Jets->Fill(TupleVariables);
 
                 //Fill the histogram (pt vs background density)
                 Jet_grefmult_pt_background->Fill(picoDst->event()->grefMult(),rho);
@@ -855,7 +882,6 @@ Int_t StPicoD0AnaMaker::Make()
                 Jet_D0pT_vs_D0rapidity->Fill(D0_rapidity,D0_pT);
                 Jet_D0pT_vs_Jetrapidity->Fill(inclusive_jets[i].rapidity(),D0_pT);
                 Jet_phi->Fill(inclusive_jets[i].phi());
-
 
                 //Print colorfully the D0-jet information
                 /*printf("\033[32m%5u %15.8f %15.8f %15.8f %15d\033[0m\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);*/

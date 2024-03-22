@@ -57,7 +57,7 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
       exit(0);
    }
 
-   Int_t nEvents = 10000;
+   Int_t nEvents = 100000;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);
