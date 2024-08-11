@@ -1,0 +1,2127 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <cmath>
+#include "TFile.h"
+#include "TClonesArray.h"
+#include "TTree.h"
+#include "TNtuple.h"
+#include "TRandom.h"
+#include "TLorentzVector.h"
+
+#include "phys_constants.h"
+#include "StBTofUtil/tofPathLength.hh"
+#include "StPicoDstMaker/StPicoDstMaker.h"
+#include "StPicoEvent/StPicoDst.h"
+#include "StPicoEvent/StPicoEvent.h"
+#include "StPicoEvent/StPicoTrack.h"
+#include "StPicoD0EventMaker/StPicoD0Event.h"
+#include "StPicoD0EventMaker/StKaonPion.h"
+#include "StPicoD0AnaMaker.h"
+#include "StPicoEvent/StPicoBTofPidTraits.h"
+#include "StCuts.h"
+#include "JetInfo.h"
+#include "../StPicoPrescales/StPicoPrescales.h"
+#include "StRoot/StRefMultCorr/StRefMultCorr.h"
+#include "StEmcADCtoEMaker/StBemcData.h"
+#include "StEmcADCtoEMaker/StEmcADCtoEMaker.h"
+#include "StEmcRawMaker/StBemcRaw.h"
+#include "StEmcRawMaker/defines.h"
+#include "StEmcRawMaker/StBemcTables.h"
+#include "BemcNewCalib.h"
+#include "Calibration2016.h"
+//////Refit include lib
+#include "PhysicalConstants.h"
+#include "StThreeVectorF.hh"
+#include "StLorentzVectorD.hh"
+#include "TH1F.h"
+#include "TH2F.h"
+#include "TH3D.h"
+#include "TFile.h"
+#include "StEvent/StDcaGeometry.h"
+//
+#include <vector>
+#include <stdio.h>
+#include <time.h>
+#include <algorithm>
+#include <sstream>
+#include <iomanip>
+#include <cmath>
+//---------------------------------
+#include <fastjet/config.h>
+#include <fastjet/PseudoJet.hh>
+#include <fastjet/JetDefinition.hh>
+#include <fastjet/ClusterSequence.hh>
+#include <fastjet/ClusterSequenceArea.hh>
+//#ifdef FASTJET_VERSION
+#include <fastjet/Selector.hh>
+#include <fastjet/tools/Subtractor.hh>
+#include <fastjet/tools/Recluster.hh>
+#include <fastjet/tools/JetMedianBackgroundEstimator.hh>
+using namespace std;
+using namespace fastjet;
+//-------------------------------------
+
+ClassImp(StPicoD0AnaMaker)
+
+  StPicoD0AnaMaker::StPicoD0AnaMaker(char const * name,char const * inputFilesList, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil, int pYear):
+    StMaker(name),mPicoDstMaker(picoDstMaker),mPicoD0Event(NULL), mGRefMultCorrUtil(grefmultCorrUtil),
+    mOutFileName(outName), mInputFileList(inputFilesList),mOutputFile(NULL), mChain(NULL), mEventCounter(0),mYear(pYear){}
+
+Int_t StPicoD0AnaMaker::Init()
+{
+  mPicoD0Event = new StPicoD0Event();
+
+  mChain = new TChain("T");
+  std::ifstream listOfFiles(mInputFileList.Data());
+  if (listOfFiles.is_open())
+  {
+    std::string file;
+    while (getline(listOfFiles, file))
+    {
+      LOG_INFO << "StPicoD0AnaMaker - Adding :" << file <<endm;
+      mChain->Add(file.c_str());
+      LOG_INFO<<" Entries = "<<mChain->GetEntries()<< endm; 
+    }
+  }
+  else
+  {
+    LOG_ERROR << "StPicoD0AnaMaker - Could not open list of files. ABORT!" << endm;
+    return kStErr;
+  }
+
+  //The prescales are used only for rescaling the RunID to the lower numbers
+  mPrescales = new StPicoPrescales(mycuts::prescalesFilesDirectoryName);
+
+  //Loading the information from the D0EventMaker
+  mChain->GetBranch("dEvent")->SetAutoDelete(kFALSE);
+  mChain->SetBranchAddress("dEvent", &mPicoD0Event);
+
+  //Output file
+  mOutputFile = new TFile(mOutFileName.Data(), "RECREATE");
+  mOutputFile->cd();
+
+  //Number of Runs
+  int nRuns = mPrescales->numberOfRuns();
+
+  //Events histograms:
+  vtxz = new TH1F("vtxz",";PVtx.z() [cm]; Count",100,-10,10);
+  vtxr = new TH2D("vtxr",";PVtx.x() [cm]; PVtx.y() [cm]",100,-3,3,100,-3,3);
+  hcentr = new TH1D("hcentr",";C_{ID}",9,-0.5,8.5);
+  hcentrW = new TH1D("hcentrW",";C_{ID}",9,-0.5,8.5);
+  NEventsCuts = new TH1F("NEventsCuts", "NEventsCuts;Cuts;Count", 10, 0, 10);
+      NEventsCuts->GetXaxis()->SetBinLabel(1, "All events");
+      NEventsCuts->GetXaxis()->SetBinLabel(2, "Triggers");
+      NEventsCuts->GetXaxis()->SetBinLabel(3, "V_{r}");
+      NEventsCuts->GetXaxis()->SetBinLabel(4, "V_{z}");
+      NEventsCuts->GetXaxis()->SetBinLabel(5, "|V_{z} - V_{z}^{VPD}|");
+      NEventsCuts->GetXaxis()->SetBinLabel(6, "|V_{x,y,z}|!=0");
+      NEventsCuts->GetXaxis()->SetBinLabel(7, "Good E run");
+      NEventsCuts->GetXaxis()->SetBinLabel(8, "Centrality");
+      NEventsCuts->GetXaxis()->SetBinLabel(9, "Good D^{0}");
+      NEventsCuts->GetXaxis()->SetBinLabel(10, "Cal.: E_{T} < 30 GeV");
+  mh1TotalEventsInRun = new TH1F("mh1TotalEventsInRun","totalEventsInRun;runIndex;totalEventsInRun",nRuns+1,0,nRuns+1);
+  mh1TotalGRefMultInRun = new TH1F("mh1TotalGRefMultInRun","totalGRefMultInRun;runIndex;totalGRefMultInRun",nRuns+1,0,nRuns+1);
+
+  //D0 histograms:
+  D0etalike = new TH1D("D0etalike",";#eta; Count",100,-5,5);
+  D0etaunlike = new TH1D("D0etaunlike",";#eta; Count",100,-5,5);
+  pioneta = new TH1D("pioneta",";#eta; Count",100,-5,5);
+  kaoneta =  new TH1D("kaoneta",";#eta; Count",100,-5,5);
+  mh1TotalKaonsInRun = new TH1F("mh1TotalKaonsInRun","totalKaonsInRun;runIndex;totalKaonsInRun",nRuns+1,0,nRuns+1);
+  mh1TotalPionsInRun = new TH1F("mh1TotalPionsInRun","totalPionsInRun;runIndex;totalPionsInRun",nRuns+1,0,nRuns+1);
+  mh1TotalD0CandidatesInRun = new TH1F("mh1TotalD0CandidatesInRun","totalD0CandidatesInRun;runIndex;totalD0CandidatesInRun",nRuns+1,0,nRuns+1);
+  mh2NKaonsVsNPions = new TH2F("mh2NKaonsVsNPions","nKaonsVsNPions;nPions;nKaons",1000,0,1000,300,0,300);
+  mh2KaonDcaVsPt = new TH2F("mh2KaonDcaVsPt","kaonDcaVsPt;p_{T}(K#pi)(GeV/c);K DCA(cm)",120,0,12,50,0,0.05);
+  mh2PionDcaVsPt = new TH2F("mh2PionDcaVsPt","pionDcaVsPt;p_{T}(K#pi)(GeV/c);#pi DCA(cm)",120,0,12,50,0,0.05);
+  mh2CosThetaVsPt = new TH2F("mh2CosThetaVsPt","cosThetaVsPt;p_{T}(K#pi)(GeV/c);cos(#theta)",120,0,12,500,0,1.0);
+  mh2DcaDaughtersVsPt = new TH2F("mh2DcaDaughtersVsPt","dcaDaughtersVsPt;p_{T}(K#pi)(GeV/c);dcaDaughters(cm)",120,0,12,200,0,0.02);
+
+  //Jet tracks
+  JetTracksdEdx = new TH2D("JetTracksdEdx","JetTracksdEdx;charge #times |p| [GeV/c]; dE/dx [KeV/cm]",200,-4,4,200,0,8);
+  JetTracksdEdxCut = new TH2D("JetTracksdEdxCut","JetTracksdEdxCut;charge #times |p| [GeV/c]; dE/dx [KeV/cm]",200,-4,4,200,0,8);
+  hpT_tr = new TH1F("hpT_tr","hpT_tr;p_{T}(GeV/c);",200,0,100);
+  heta_phi_tr = new TH2F("heta_phi_tr","heta_phi_tr;#phi;#eta",120,0,12,50,0,0.05);
+  heta_tr = new TH1F("heta_tr","heta_tr;#eta",50,-6,6);
+  hphi_tr = new TH1F("hphi_tr","hphi_tr;#phi;",40,-6.2830,6.2830);
+  hdca_z_tr = new TH2F("hdca_z_tr","hdca_z_tr;DCA(cm); v_{z}(GeV/c)",120,0,12,50,-10,10);
+  hdca_pT = new TH2F("hdca_pT","hdca_pT; DCA(cm); p_{T}(GeV/c) ",120,0,12,100,0,200);
+  hdca_tr = new TH1F("hdca_tr","hdca_tr; DCA(cm)",120,0,12);
+  hcharged_tr = new TH1F("hcharged_tr","hcharged_tr;Charge;",5,-1,1);
+
+  //Jet background
+  Jet_grefmult_pt_background = new TH2D("Jet_rho_vs_grefmult","Jet_rho_vs_grefmult;grefmult; p_{T} (GeV/c)",1000,0,1000,100,-1,32);
+  Jet_D0pT_vs_D0rapidity = new TH2D("Jet_D0pT_vs_D0rapidity","Jet_D0pT_vs_D0rapidity;rapidity; p_{T} (GeV/c)",100,-1.5,1.5,100,0,10);
+  Jet_D0pT_vs_Jetrapidity = new TH2D("Jet_D0pT_vs_JetRapidity","Jet_D0pT_vs_JetRapidity;rapidity; p_{T} (GeV/c)",100,-1.5,1.5,100,0,10);
+  Jet_phi = new TH1D("Jet_phi","Jet_phi;#phi;",40,-6.2830,6.2830);
+
+
+  //TNtuple D0-jets
+  Jets = new TNtuple("Jets", "Jets", "RunId:centrality:centr_weight:NJet:pseudorapidity:jet_phi:grefmult:bg_dens:jet_area:jet_rap:jet_pt:jet_pt_corr:D0mass:D0_r:D0_pT:lambda_1_0half:lambda_1_1:lambda_1_1half:lambda_1_2:lambda_1_3:lambda_2_0:z:NConst:NpTfraction:D0_rap");
+
+VariableJets = {
+    {"RunId", 0},          // sgn(RunID) = 1 -> D0, sgn(RunID) = -1 -> antiD0
+    {"centrality", 1},     // 0 -> 70-80%, 1 -> 60-70%, 2 -> 50-60%, 3 -> 40-50%, 4 -> 30-40%, 5 -> 20-30%, 6 -> 10-20%, 7 -> 5-10%, 8 -> 0-5%
+    {"centr_weight", 2},   // centrality weight
+    {"NJet", 3},           // Number of D0 in one event
+    {"pseudorapidity", 4}, // pseudorapidity of D0-jet
+    {"jet_phi", 5},        // phi of D0-jet
+    {"grefmult", 6},       // grefmult
+    {"bg_dens", 7},        // background density
+    {"jet_area", 8},       // area of D0-jet
+    {"jet_rap", 9},        // rapidity of D0-jet
+    {"jet_pt", 10},        // pt of D0-jet
+    {"jet_pt_corr", 11},   // pt of D0-jet after background subtraction
+    {"D0mass", 12},        // mass of D0
+    {"D0_r", 13},          // r of D0
+    {"D0_pT", 14},         // pt of D0
+    {"lambda_1_0half", 15},// angularity kappa=1 and alpha=0.5 after background subtraction
+    {"lambda_1_1", 16},    // angularity kappa=1 and alpha=1 after background subtraction
+    {"lambda_1_1half", 17},// angularity kappa=1 and alpha=1.5 after background subtraction
+    {"lambda_1_2", 18},    // angularity kappa=1 and alpha=2 after background subtraction
+    {"lambda_1_3", 19},    // angularity kappa=1 and alpha=3 after background subtraction
+    {"lambda_2_0", 20},    // angularity kappa=2 and alpha=0 after background subtraction
+    {"z", 21},             // z of D0-jet after background subtraction
+    {"NConst", 22},        // Number of constituents
+    {"NpTfraction", 23},   // Neutral pT fraction of D0-jet
+    {"D0_rap", 24}   	   // Neutral pT fraction of D0-jet
+};
+
+////EventStats = new TNtuple("EventStats", "EventStats","RunId:centrality:centr_weight");
+
+  //Bin size of 2D D0 mass-pt like-sign and unlike-sign histograms
+  const int xbinSize=100;
+  float binMass[2001];
+
+  //Calculating of bin edges
+  float xbin[101];
+  for(int i=0;i<101;i++) xbin[i] = 0.1*i;
+  for(int i=0;i<2001;i++) binMass[i] = 0.01*i;
+
+  //2D D0 mass-pt like-sign and unlike-sign histograms
+  massPt = new TH2D("massPt",";M_{K#pi} [GeV/c^{2}]; p_{T} [GeV/c]",2000,binMass,xbinSize,xbin);
+  massPtLike = new TH2D("massPtLike",";M_{K#pi} [GeV/c^{2}]; p_{T} [GeV/c]",2000,binMass,xbinSize,xbin);
+
+  //Loading of BEMC tables
+  StMaker* maker = GetMaker("Eread");
+  mADCtoEMaker = dynamic_cast<StEmcADCtoEMaker*>(GetMaker("Eread"));
+  assert(mADCtoEMaker);
+  mTables = mADCtoEMaker->getBemcData()->getTables();
+
+  return kStOK;
+}
+
+//-----------------------------------------------------------------------------
+StPicoD0AnaMaker::~StPicoD0AnaMaker(){
+  //Destructor
+  delete mGRefMultCorrUtil;
+}
+
+//-----------------------------------------------------------------------------
+struct FourMomentum {
+  //Four-momentum of the reconstructed particle
+  double E, px, py, pz, D0_antiD0, D0Mass;
+  // D0_antiD0: 1 -> D0, -1 -> antiD0
+};
+
+//-----------------------------------------------------------------------------
+double delta_R(double eta1, double phi1, double eta2, double phi2) {
+  //Calculating of delta R = sqrt(delta eta^2 + delta phi^2)
+  double deta = eta1 - eta2;
+  double dphi = TVector2::Phi_mpi_pi(phi1 - phi2);
+
+  return sqrt(deta*deta + dphi*dphi);
+
+  //Function returns delta R
+}
+
+//-----------------------------------------------------------------------------
+Int_t StPicoD0AnaMaker::Finish(){
+  //Write histograms and close the output file, if you create a new histogram it has to be added here
+  LOG_INFO << " StPicoD0AnaMaker - writing data and closing output file " <<endm;
+  fout.close();
+  mOutputFile->cd();
+
+  //Events histograms:
+  vtxz->Write();
+  vtxr->Write();
+  hcentr->Write();
+  hcentrW->Write();
+  NEventsCuts->Write();
+  mh1TotalEventsInRun->Write();
+  mh1TotalGRefMultInRun->Write();
+
+  //D0 histograms:
+  D0etalike->Write();
+  D0etaunlike->Write();
+  pioneta->Write();
+  kaoneta->Write();
+  mh1TotalKaonsInRun->Write();
+  mh1TotalPionsInRun->Write();
+  mh1TotalD0CandidatesInRun->Write();
+  mh2NKaonsVsNPions->Write();
+  mh2KaonDcaVsPt->Write();
+  mh2PionDcaVsPt->Write();
+  mh2CosThetaVsPt->Write();
+  mh2DcaDaughtersVsPt->Write();
+
+  //Jet Tracks
+  JetTracksdEdx->Write();
+  JetTracksdEdxCut->Write();
+  hpT_tr->Write();
+  heta_phi_tr->Write();
+  heta_tr->Write();
+  hphi_tr->Write();
+  hdca_z_tr->Write();
+  hdca_pT->Write();
+  hdca_tr->Write();
+  hcharged_tr->Write();
+
+  //Jet background
+  Jet_grefmult_pt_background->Write();
+  Jet_D0pT_vs_D0rapidity->Write();
+  Jet_D0pT_vs_Jetrapidity->Write();
+  Jet_phi->Write();
+
+  //2D D0 mass-pt like-sign and unlike-sign histograms
+  massPt->Write();
+  massPtLike->Write();
+
+  //TNtuple D0-jets
+  Jets->Write();
+  ////EventStats->Write();
+  
+  //Closing of the output file
+  mOutputFile->Close();
+
+  //Closing of the input file including prescales
+  delete mPrescales;
+
+  return kStOK;
+}
+//-----------------------------------------------------------------------------
+Int_t StPicoD0AnaMaker::Make()
+{
+  //Main function where the analysis is done, each "event" is analyzed here
+  readNextEvent();
+
+  //Check if everything is loaded properly
+  if (!mPicoDstMaker)
+  {
+    LOG_WARN << " StPicoD0AnaMaker - No PicoDstMaker! Skip! " << endm;
+    return kStWarn;
+  }
+
+  picoDst = mPicoDstMaker->picoDst();
+  if (!picoDst)
+  {
+    LOG_WARN << "StPicoD0AnaMaker - No PicoDst! Skip! " << endm;
+    return kStWarn;
+  }
+ 
+
+  //Check if the loaded picodsts are consistent with raw D0 reconstructed data from StPicoD0Event
+  if(mPicoD0Event->runId() != picoDst->event()->runId() ||
+      mPicoD0Event->eventId() != picoDst->event()->eventId())
+  {
+    LOG_ERROR <<" StPicoD0AnaMaker - !!!!!!!!!!!! ATTENTION !!!!!!!!!!!!!"<<endm;
+    LOG_ERROR <<" StPicoD0AnaMaker - SOMETHING TERRIBLE JUST HAPPENED. StPicoEvent and StPicoD0Event are not in sync."<<endm;
+    exit(1);
+  }
+  
+
+if (picoDst->event()->eventId()!=2804657)return kStOK;
+
+  // -------------- USER ANALYSIS -------------------------
+
+  //Loading of the raw D0 daughters
+  TClonesArray const * aKaonPion = mPicoD0Event->kaonPionArray();
+
+  //Vertex of the event
+  StThreeVectorF pVtx(-999.,-999.,-999.);
+
+  //Loading of the event
+  StPicoEvent *event = (StPicoEvent *)picoDst->event();
+
+  //Loading of the primary vertex
+  pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
+
+  //NEventsCuts: All events
+  NEventsCuts->Fill(0);
+
+  //Check if the event is good (vertex, pile-up, MB trigger)
+  if(!(isGoodEvent(mYear,NEventsCuts))) return kStOK;
+
+  //Check if the GRefMultCorr information is available
+  if(!mGRefMultCorrUtil) {
+    LOG_WARN << " No mGRefMultCorrUtil! Skip! " << endl;
+    return kStWarn;
+  }
+
+  //Check if the event is in a bad run (due to BEMC towers)
+  if (mYear==2016 && IsBadEnergyRun(mPicoD0Event->runId())) return kStOK;
+
+  //2014 Good run list
+  bool isGoodRun = true;
+  const std::set<int>* goodRunList = nullptr;
+  if (mYear == 2014){
+	int runIdLoad = mPicoD0Event->runId();
+	goodRunList = &mycuts::goodRun2014; 
+	isGoodRun = goodRunList->find(runIdLoad) != goodRunList->end();
+  }
+	
+  if (!isGoodRun) return kStOK;
+  ///////	
+
+  //NEventsCuts: Good E
+  NEventsCuts->Fill(6);
+
+  //Loadig of the GRefMultCorr information
+  mGRefMultCorrUtil->init(picoDst->event()->runId());
+  mGRefMultCorrUtil->initEvent(picoDst->event()->grefMult(),pVtx.z(),picoDst->event()->ZDCx()) ;
+
+  //Check if the event is in a bad run (due to centrality estimation)
+  if (mGRefMultCorrUtil->isBadRun(picoDst->event()->runId())) return kStOK;
+
+  //Loading of the centrality
+  int centrality  = mGRefMultCorrUtil->getCentralityBin9();
+
+  //Check if the centrality is in the range
+  if(centrality<0) return kStOK;
+
+  //NEventsCuts: Centrality
+  NEventsCuts->Fill(7);
+
+  //Loading of the weight for the centrality correction
+  double reweight = mGRefMultCorrUtil->getWeight();
+
+  //Filling events histograms
+  vtxz->Fill(pVtx.z());
+  vtxr->Fill(pVtx.x(),pVtx.y());
+  hcentr->Fill(centrality);
+  hcentrW->Fill(centrality,reweight);
+  
+  ////EventStats->Fill(picoDst->event()->runId(),centrality,reweight); 
+
+  //Loading event information
+  //int eventID = mPicoD0Event->eventId();
+  int RunId = mPicoD0Event->runId();
+
+  //Loading of the number of tracks in the event
+  UInt_t nTracks = picoDst->numberOfTracks();
+
+  //Variable checking if there is a good D0 candidate in the event, changed to true, if the candidate is found
+  bool IsThereD0 = false;
+
+  //Preparation of the vector of the daughter candidates
+  std::vector<double> DaughterPionTrackVector;
+  std::vector<double> DaughterKaonTrackVector;
+
+  //Print of the Fastjet banner
+  fastjet::ClusterSequence::print_banner();
+
+  //Preparation of the four-vector of the D0 candidates
+  std::vector<FourMomentum> D0_fourmomentum;
+
+  //For cyklus of all raw D0 candidates
+  for (int idx = 0; idx < aKaonPion->GetEntries(); ++idx){
+  	//cout << "*********Test*********" << endl;
+
+    //Loading of the raw D0 candidates and there daughters
+    StKaonPion const* kp = (StKaonPion*)aKaonPion->At(idx);
+    StPicoTrack const* kaon = picoDst->track(kp->kaonIdx());
+    StPicoTrack const* pion = picoDst->track(kp->pionIdx());
+
+//----------TPC-and-TOF-identification-of-the-daughter-tracks----------
+    //Check if the daughter tracks are good.
+    if (!isGoodTrack(kaon) || !isGoodTrack(pion)) continue;
+	//cout << "good track" << endl;
+
+    //Check if the daughter pions tracks are good.
+    //if (!isTpcPion(pion)) continue;
+    bool tpcPion = isTpcPion(pion);
+
+    //Check if the daughter kaon tracks are good.
+    bool tpcKaon = isTpcKaon(kaon);
+
+    //Calculating of the beta for the kaon (TOF)
+    float kBeta = getTofBeta(kaon,&pVtx,picoDst);
+    
+    //Calculating of the beta for the pion (TOF)
+    float pBeta = getTofBeta(pion,&pVtx,picoDst);
+
+    //Check if the there is a TOF information for the kaon
+    bool kTofAvailable = kBeta>0;
+    
+    //Check if the there is a TOF information for the pion
+    bool pTofAvailable = pBeta>0;
+
+    //Check if the kaon is good w.r.t the expected beta value (TOF)
+    bool tofKaon = kTofAvailable && isTofKaon(kaon,kBeta);
+    
+    //Check if the pion is good w.r.t the expected beta value (TOF)
+    bool tofPion = pTofAvailable && isTofPion(pion,pBeta);
+
+    //Final check if the kaon is good. If the TOF information is not available the more strict TPC check is used.
+    bool goodKaon = (kTofAvailable && tofKaon) || (!kTofAvailable && tpcKaon);
+    
+    //Final check if the pion is good. If the TOF information is not available the more strict TPC check is used.
+    bool goodPion = (pTofAvailable && tofPion) || (!pTofAvailable && tpcPion);
+//	cout << "pTofAvailable: " << pTofAvailable << endl;
+	//cout << "tofPion: " << tofPion << endl;
+
+
+    //Check if the kaon is good
+    if(!goodKaon) continue;
+    
+//cout << "good kaon" << endl;
+    //Check if the pion is good
+    if(!goodPion) continue;
+ //   cout << "good pion" << endl;
+
+//----------Pair-cuts--------------------------------------------------
+    //Initialisation of the charge
+    int charge=0;
+
+    //Loading of the D0 charge and mass
+    float d0Pt = kp->pt();  
+    double dMass = kp->m();
+ //   cout << "mass: " << dMass << endl;
+
+    //Upper cut on the D0 pT
+    if(d0Pt>10) continue;
+
+    //Initialisation of the centrality weight
+    double reweight_eff = 1.;
+
+    //Check if all pair cuts conditions are met
+    if((charge=isD0PairCentrality_pt(kp,centrality, mYear))!=0 ){
+        //Charge = -1 -> Unlike-sign (pi+K- or pi-K+), Charge = 1 -> Like-sign (pi+K+), Charge = 2 -> Like-sign (pi-K-)
+
+        //If pair is Unlike-sign
+        if(charge==-1){
+
+            //Filling of the D0 histograms
+            massPt->Fill(dMass,d0Pt,reweight*reweight_eff);
+            D0etaunlike->Fill(kp->eta());
+      
+            //Saving of the daughter tracks
+            DaughterPionTrackVector.push_back(pion->id());
+            DaughterKaonTrackVector.push_back(kaon->id());
+
+            //Check ff the mass is in the D0 mass window
+            //if(dMass>1.81&&dMass<1.91){
+
+                //The event is noted
+                IsThereD0 = true;
+
+                //Saving of D0 four-momenta // E,       px,       py,        pz,         D0_antiD0,            D0 mass;
+                FourMomentum D0_actual = {kp->Energy(), kp->Px(), kp->Py(),  kp->Pz(), (double)pion->charge(), dMass};
+                D0_fourmomentum.push_back(D0_actual);
+            //}
+
+            //Loading of the rescaled RunID
+            int runIndex = mPrescales->runIndex(mPicoD0Event->runId());
+
+            //Filling of the histograms
+            pioneta->Fill(pion->pMom().PseudoRapidity());
+            kaoneta->Fill(kaon->pMom().PseudoRapidity());
+            mh1TotalEventsInRun->Fill(runIndex);
+            mh1TotalGRefMultInRun->Fill(runIndex,picoDst->event()->grefMult());
+            mh1TotalKaonsInRun->Fill(runIndex,mPicoD0Event->nKaons());
+            mh1TotalPionsInRun->Fill(runIndex,mPicoD0Event->nPions());
+            mh1TotalD0CandidatesInRun->Fill(runIndex,mPicoD0Event->nKaonPion());
+            mh2NKaonsVsNPions->Fill(mPicoD0Event->nPions(),mPicoD0Event->nKaons());
+            mh2KaonDcaVsPt->Fill(kp->pt(),kp->kaonDca());
+            mh2PionDcaVsPt->Fill(kp->pt(),kp->pionDca());
+            mh2CosThetaVsPt->Fill(kp->pt(),cos(kp->pointingAngle()));
+            mh2DcaDaughtersVsPt->Fill(kp->pt(),kp->dcaDaughters());
+
+        } //end of the Unlike-sign if
+
+        //If pair is Like-sign
+        if(charge>0){
+
+            //Filling of the D0 histograms
+            massPtLike->Fill(dMass,d0Pt,reweight*reweight_eff);
+            D0etalike->Fill(kp->eta());
+
+        } //end of the Like-sign if
+       
+    } //end of the pair cuts if
+
+  } //end of the D0 candidate loop
+
+//---------------------------------------------------------------------
+//-------------------JET-RECONSTRUCTION-PART---------------------------
+//---------------------------------------------------------------------
+
+  //Table constants
+  double pimass = 0.13957018;
+
+  //Check if there is a D0 candidate in the event
+  if(IsThereD0){
+
+      //NEventsCuts: Good D0 candidate
+      NEventsCuts->Fill(8);
+
+      //Initialisation of the input particle vectors for FastJet
+      vector<fastjet::PseudoJet> input_particles;
+      vector<fastjet::PseudoJet> chargedjetTracks;
+      vector<fastjet::PseudoJet> neutraljetTracks;
+
+      //Radius of the jet
+      double R = 0.4;
+
+      //Loop over all D0 candidates in the event.
+      //If there are more than one, the jet reconstruction is done for each D0 candidate separately
+      //ignoring the other not reconstructed D0 candidates in the event.
+      for (unsigned int nD0 = 0; nD0 < D0_fourmomentum.size(); nD0++) {
+
+
+
+//-----------Neutral-tracks--------------------------------------------------
+
+        //Fill array Sump with momenta of tracks which are matched to BEMC towers
+        GetCaloTrackMomentum(picoDst,TVector3(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z()));
+
+        //Loop over all tracks in the event
+        for (int iTow = 0; iTow < 4800; iTow++){
+
+           //Get the tower hit
+           StPicoBTowHit *towHit = picoDst->btowHit(iTow);
+
+           //Check if the tower is bad or missing information
+           if (!towHit || towHit->isBad()) continue;
+
+           //Get the alternative counting method for the tower ID
+           //NumericIndex - Counting from 0 to 4799
+           //SoftId - Counting from 1 to 4800
+           int realtowID = towHit->numericIndex2SoftId(iTow);
+
+           //Initialize the tower energy
+           double towE;
+
+           //Calculation of the tower energy depending on the year
+           //In 2014, there was a problem with the energy calibration, so the energy has to be corrected
+           if(mYear==2014) {
+                  //Exclude bad towers, saved in JetInfo.h
+                  ////if (BadTowerMap[realtowID]) continue;
+                  //Calculate the tower energy
+                  ////towE = GetTowerCalibEnergy(iTow+1);           
+                  towE = towHit->energy(); //Only test
+              }
+              if(mYear==2016) {
+                  //Exclude bad towers, saved in Calibration2016.h
+                  if (EnergyBadTowerMap[realtowID]) continue;
+                  //Get the tower energy
+                  towE = towHit->energy();
+              }
+
+              //Subtraction of the hadronic background, fHadronCorr is set in RunPicoD0AnaMaker.C (0 - no or 1 - yes)
+              towE-= fHadronCorr*Sump[iTow];
+              
+
+           //If the tower energy is negative, set it to 0
+           if (towE < 0) towE = 0;
+
+           //Initialize the tower geometry
+           StEmcGeom* mEmcGeom;
+           mEmcGeom = StEmcGeom::getEmcGeom("bemc");
+           StEmcPosition* mEmcPosition;
+           mEmcPosition = new StEmcPosition();
+
+           //
+
+
+            float Toweta_tmp = 0, Towphi = 0;
+
+           //Get the eta and phi of the tower
+           mEmcGeom->getEtaPhi(realtowID,Toweta_tmp,Towphi);
+
+           //Correct the eta of the tower for the vertex position
+           //Because the loaded eta is w.r.t. the center of the TPC, but the vertex do not have to be in the center
+           ////float Toweta = vertexCorrectedEta(Toweta_tmp, event->primaryVertex().z()); //Old
+           StThreeVectorF towerPosition = mEmcPosition->getPosFromVertex(StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z()), realtowID);
+           float Toweta = towerPosition.pseudoRapidity();
+
+           //Calculate the transverse energy
+           //max eta 1.05258 max difference: ET = 0.124452 for E = 0.2, if we cut on |Vz| < 30 cm
+           double ET = towE/cosh(Toweta);
+
+           //If the transverse energy is greater than 30 GeV, discard the event
+           if (ET > 30) {
+                TowArr.clear();
+                TowEta.clear();
+                TowPhi.clear();
+                Clusters.clear();
+                return kStOK;
+           }
+
+           //Initialize and calculate the momentum components
+          /* double px,py,pz;
+           px = ET*cos(Towphi);
+           py = ET*sin(Towphi);
+           pz = towE*tanh(Toweta); *///TTEESSTT
+           
+           Double_t mass = 0.13957;
+           Double_t p = 1.0 * TMath::Sqrt(towE * towE - mass * mass);
+           Double_t posX = towerPosition.x();
+  	   Double_t posY = towerPosition.y();
+  	   Double_t posZ = towerPosition.z();
+           Double_t r = TMath::Sqrt(posX * posX + posY * posY + posZ * posZ);
+           TVector3 momA;
+             if(r > 1e-12) {
+           momA.SetX(p * posX / r);
+    	   momA.SetY(p * posY / r);
+   	   momA.SetZ(p * posZ / r);
+   	   } else {
+   	   momA.SetX(0);
+   	   momA.SetY(0);
+   	   momA.SetZ(0);
+   	   }
+   	   Double_t px = momA.x();
+           Double_t py = momA.y();
+           Double_t pz = momA.z();
+           
+
+           //Create a jet with the calculated momentum components
+           PseudoJet inputTower(px, py, pz, towE);
+//cout << "towerID: " << iTow << " " << px << " " << py << " " << pz << " " << towE << endl;
+           //Discarding of the towers with low transverse energy (Defined in RunPicoD0AnaMaker.C as setCutETmin)
+           //TrackBasedJets = charged tracks + D0 (Defined in RunPicoD0AnaMaker.C as setOnlyTrackBasedJets)
+           if (inputTower.perp() > fETmincut && OnlyTrackBasedJets == 0){
+               //Set the flag to 10 if the particle is neutral
+               inputTower.set_user_index(10);
+               //Add the neutral particle to the neutral particle vector
+               neutraljetTracks.push_back(inputTower);
+               //Add the neutral particle to the inclusive particle vector
+               input_particles.push_back(inputTower);
+           } //End of minimum ET cut
+
+        } //End of loop over all towers
+
+        //NEventsCuts: Cal.: E_{T} < 30 GeV
+        //Only for the first D0 otherwise it is counted multiple times
+        if (nD0==0) NEventsCuts->Fill(9);
+
+//-----------Charged-tracks--------------------------------------------------
+
+	double pxsum = 0;
+	double pysum = 0;
+	double pzsum = 0;
+	double Esum = 0;
+	double Idsum = 0;
+		
+        //Loop over all tracks in the event
+        for (unsigned short iTrack = 0; iTrack < nTracks; ++iTrack){
+
+            //The i-th track is loaded
+            StPicoTrack* trk = picoDst->track(iTrack);
+
+            //Check if the track exists
+            if(!trk) continue;
+
+            //Filling jet track histogram before any cuts
+            JetTracksdEdx->Fill(trk->gPtot()*trk->charge(),trk->dEdx());
+
+            //Check if the track is a good track
+            if (!isGoodJetTrack(trk,event)) continue;
+
+            //Loading of the pT
+            double pT = trk->gMom().Perp();
+            //Check if the pT is above 0.2 GeV/c or if it is NaN, because NaN!=NaN
+            if(pT != pT) continue; // NaN test.
+            //Loading of the eta, phi, dca and charge
+            float eta = trk->gMom().PseudoRapidity();
+            float phi = trk->gMom().Phi();
+            float dca = (TVector3(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z()) - trk->origin()).Mag();
+            float charged = trk->charge();
+
+            //Filling jet track histogram before after cuts
+            JetTracksdEdxCut->Fill(trk->gPtot()*trk->charge(),trk->dEdx());
+
+            //If the track is not daughter pion nor kion then...
+            if (DaughterPionTrackVector[nD0] != trk->id() && DaughterKaonTrackVector[nD0] != trk->id()){
+
+                //Defining the four-momentum of the charged particle, assumed pi+ mass
+                //                       px,       py,               pz,                                 E = sqrt(p^2 + m^2),
+                //fastjet::PseudoJet pj(trk->gMom().x(),trk->gMom().y(),trk->gMom().z(), sqrt(trk->gMom().Mag()*trk->gMom().Mag()+M_PION_PLUS*M_PION_PLUS)); //TTEESSTT
+                fastjet::PseudoJet pj(trk->gMom().x(),trk->gMom().y(),trk->gMom().z(), sqrt(trk->gMom().Mag()*trk->gMom().Mag()+0.13957*0.13957));
+		pxsum += trk->gMom().x();
+		pysum += trk->gMom().y();
+		pzsum += trk->gMom().z();
+		Esum += sqrt(trk->gMom().Mag()*trk->gMom().Mag()+0.13957*0.13957);
+		Idsum += trk->id();
+		
+     // cout << "ID: " << trk->id() << " " << trk->gMom().x() << " " << trk->gMom().y() << " " << trk->gMom().z() << " " << sqrt(trk->gMom().Mag()*trk->gMom().Mag()+0.13957*0.13957) << endl;
+
+		//Set the flag to 3 if the particle is charged
+		pj.set_user_index(3);
+                //Add the charged particle to the charged particle vector
+                chargedjetTracks.push_back(pj);
+                //Add the charged particle to the inclusive particle vector
+               //// input_particles.push_back(pj);
+
+            }//End of if the track is not daughter pion nor kion
+
+            //Filling the track histograms
+            hpT_tr->Fill(pT, reweight);
+            heta_phi_tr->Fill(phi + TMath::Pi(), eta,  reweight);
+            heta_tr->Fill(eta, reweight);
+            hphi_tr->Fill(phi + TMath::Pi(), reweight); //to shift by pi
+            hdca_z_tr->Fill(dca, event->primaryVertex().z(), reweight);
+            hdca_pT->Fill(dca, pT, reweight);
+            hdca_tr->Fill(dca, reweight);
+            hcharged_tr->Fill(charged, reweight);
+
+        } //End of loop over all tracks
+cout << "id sum: " << Idsum << endl;
+//-----------D0-track--------------------------------------------------------
+
+        //Defining the four-momentum of the D0 candidate
+        double pionmassenergy = sqrt(D0_fourmomentum[nD0].px*D0_fourmomentum[nD0].px+D0_fourmomentum[nD0].py*D0_fourmomentum[nD0].py+D0_fourmomentum[nD0].pz*D0_fourmomentum[nD0].pz+0.13957*0.13957);
+       // fastjet::PseudoJet pj(D0_fourmomentum[nD0].px,D0_fourmomentum[nD0].py,D0_fourmomentum[nD0].pz,D0_fourmomentum[nD0].E); //TTEESSTT
+        fastjet::PseudoJet pj(D0_fourmomentum[nD0].px,D0_fourmomentum[nD0].py,D0_fourmomentum[nD0].pz,pionmassenergy); //TTEESSTT
+       // cout << "D0: " << D0_fourmomentum[nD0].px << " " << D0_fourmomentum[nD0].py << " "<< D0_fourmomentum[nD0].pz << " " << pionmassenergy << endl;
+        //Set flag to 2 if the D0 candidate is a D0 and to -2 if it is a anti-D0
+        //It cannot be -1 or 1 because the default flag in FastJet is -1.
+        pj.set_user_index(D0_fourmomentum[nD0].D0_antiD0*2);
+
+        //Add the D0 candidate to the inclusive particle vector
+        ////input_particles.push_back(pj);
+//cout << pxsum << " " << pysum << " " << pzsum << " "  << Esum << endl;
+
+
+input_particles.push_back(fastjet::PseudoJet(0.553625, 0.364493, -0.647871, 0.937322));
+input_particles.push_back(fastjet::PseudoJet(0.0701278, 0.1931, -0.181952, 0.307883));
+input_particles.push_back(fastjet::PseudoJet(0.526599, 0.253191, -0.426944, 0.737003));
+input_particles.push_back(fastjet::PseudoJet(0.517583, 0.216374, -0.40392, 0.705224));
+input_particles.push_back(fastjet::PseudoJet(0.276604, -0.00294464, -0.187387, 0.362094));
+input_particles.push_back(fastjet::PseudoJet(0.215994, -0.0243263, -0.134348, 0.291161));
+input_particles.push_back(fastjet::PseudoJet(0.384027, 0.3089, -0.288577, 0.587922));
+input_particles.push_back(fastjet::PseudoJet(0.253223, 0.285591, -0.223593, 0.463851));
+input_particles.push_back(fastjet::PseudoJet(0.284289, -0.0604076, -0.162438, 0.361019));
+input_particles.push_back(fastjet::PseudoJet(0.73381, 0.34693, -0.320977, 0.883937));
+input_particles.push_back(fastjet::PseudoJet(0.19682, 0.336984, -0.122084, 0.432066));
+input_particles.push_back(fastjet::PseudoJet(1.14919, 0.36732, -0.262767, 1.24261));
+input_particles.push_back(fastjet::PseudoJet(1.12603, 0.553067, -0.193556, 1.27702));
+input_particles.push_back(fastjet::PseudoJet(0.215505, 0.22641, -0.0227071, 0.343074));
+input_particles.push_back(fastjet::PseudoJet(0.254896, -0.0372217, -0.00103761, 0.292982));
+input_particles.push_back(fastjet::PseudoJet(0.24351, -0.059868, 0.0233555, 0.287935));
+input_particles.push_back(fastjet::PseudoJet(1.55218, 0.554461, 0.145752, 1.66055));
+input_particles.push_back(fastjet::PseudoJet(0.628548, 0.0985129, 0.181789, 0.676242));
+input_particles.push_back(fastjet::PseudoJet(0.407155, 0.000898732, 0.134108, 0.450822));
+input_particles.push_back(fastjet::PseudoJet(0.541361, 0.0944249, 0.213576, 0.605873));
+input_particles.push_back(fastjet::PseudoJet(0.746746, 0.254421, 0.347676, 0.873338));
+input_particles.push_back(fastjet::PseudoJet(0.246709, 0.334639, 0.252248, 0.505923));
+input_particles.push_back(fastjet::PseudoJet(0.35002, 0.528269, 0.45142, 0.79047));
+input_particles.push_back(fastjet::PseudoJet(0.649293, 0.403136, 0.662108, 1.02077));
+input_particles.push_back(fastjet::PseudoJet(0.302035, -0.0204327, 0.29079, 0.442359));
+input_particles.push_back(fastjet::PseudoJet(0.703516, 1.00246, -0.7883, 1.46313));
+input_particles.push_back(fastjet::PseudoJet(0.789845, 1.28922, -0.919514, 1.77508));
+input_particles.push_back(fastjet::PseudoJet(-0.0515112, 0.242729, -0.129971, 0.312958));
+input_particles.push_back(fastjet::PseudoJet(0.206567, 0.1503, -0.1296, 0.318647));
+input_particles.push_back(fastjet::PseudoJet(0.223451, 0.0683956, -0.0945677, 0.288152));
+input_particles.push_back(fastjet::PseudoJet(0.626829, 0.900918, -0.395869, 1.17506));
+input_particles.push_back(fastjet::PseudoJet(1.17688, 2.11919, -0.313808, 2.44825));
+input_particles.push_back(fastjet::PseudoJet(0.47539, 0.797949, -0.121784, 0.947116));
+input_particles.push_back(fastjet::PseudoJet(0.950064, 1.21238, -0.118219, 1.55111));
+input_particles.push_back(fastjet::PseudoJet(0.537364, 0.540843, -0.054359, 0.776986));
+input_particles.push_back(fastjet::PseudoJet(0.29881, 1.09002, 0.109158, 1.14404));
+input_particles.push_back(fastjet::PseudoJet(0.149372, 0.400053, 0.0824434, 0.456762));
+input_particles.push_back(fastjet::PseudoJet(0.453719, 1.00662, 0.27523, 1.14646));
+input_particles.push_back(fastjet::PseudoJet(0.506526, 1.29095, 0.405808, 1.45165));
+input_particles.push_back(fastjet::PseudoJet(0.0680358, 0.362364, 0.111354, 0.409654));
+input_particles.push_back(fastjet::PseudoJet(0.485938, 0.890402, 0.326812, 1.07482));
+input_particles.push_back(fastjet::PseudoJet(0.352754, 0.902524, 0.351931, 1.04035));
+input_particles.push_back(fastjet::PseudoJet(0.275204, 0.565654, 0.234605, 0.685727));
+input_particles.push_back(fastjet::PseudoJet(0.334367, 0.232102, 0.160362, 0.459205));
+input_particles.push_back(fastjet::PseudoJet(-0.019182, 0.276184, 0.10883, 0.328587));
+input_particles.push_back(fastjet::PseudoJet(0.328278, 0.25606, 0.168979, 0.470496));
+input_particles.push_back(fastjet::PseudoJet(0.257768, 0.342002, 0.177278, 0.484063));
+input_particles.push_back(fastjet::PseudoJet(0.743674, 0.643507, 0.456034, 1.09298));
+input_particles.push_back(fastjet::PseudoJet(1.01133, 1.12274, 0.883148, 1.75578));
+input_particles.push_back(fastjet::PseudoJet(0.255842, 0.114356, 0.173315, 0.357841));
+input_particles.push_back(fastjet::PseudoJet(0.349174, 0.766459, 0.575545, 1.02962));
+input_particles.push_back(fastjet::PseudoJet(0.9022, 1.7931, 1.38391, 2.4421));
+input_particles.push_back(fastjet::PseudoJet(0.358754, 0.842088, 0.730818, 1.17957));
+input_particles.push_back(fastjet::PseudoJet(0.32438, 0.556055, 0.526544, 0.843296));
+input_particles.push_back(fastjet::PseudoJet(0.550036, 0.892008, 1.05347, 1.49248));
+input_particles.push_back(fastjet::PseudoJet(-0.173041, 0.249673, -0.285891, 0.439879));
+input_particles.push_back(fastjet::PseudoJet(0.195558, 1.1542, -1.10038, 1.61268));
+input_particles.push_back(fastjet::PseudoJet(-0.00903485, 1.61186, -1.42561, 2.1564));
+input_particles.push_back(fastjet::PseudoJet(0.122755, 0.237051, -0.216693, 0.371076));
+input_particles.push_back(fastjet::PseudoJet(-0.0425108, 0.479931, -0.39555, 0.638812));
+input_particles.push_back(fastjet::PseudoJet(-0.0195598, 0.627184, -0.435826, 0.776638));
+input_particles.push_back(fastjet::PseudoJet(-0.131102, 0.184267, -0.112703, 0.288659));
+input_particles.push_back(fastjet::PseudoJet(0.0819712, 1.00122, -0.5631, 1.16005));
+input_particles.push_back(fastjet::PseudoJet(0.337836, 1.07258, -0.403137, 1.20273));
+input_particles.push_back(fastjet::PseudoJet(-0.151725, 0.523359, -0.188976, 0.593394));
+input_particles.push_back(fastjet::PseudoJet(0.0710801, 1.1953, -0.327392, 1.24919));
+input_particles.push_back(fastjet::PseudoJet(-0.0688877, 0.443676, -0.0977084, 0.48023));
+input_particles.push_back(fastjet::PseudoJet(0.13937, 0.483931, -0.0888347, 0.53008));
+input_particles.push_back(fastjet::PseudoJet(-0.0508737, 0.610826, -0.0923799, 0.635382));
+input_particles.push_back(fastjet::PseudoJet(0.0390307, 0.534571, -0.0324771, 0.554819));
+input_particles.push_back(fastjet::PseudoJet(0.152195, 0.265435, -0.0193183, 0.336856));
+input_particles.push_back(fastjet::PseudoJet(0.222954, 0.366214, -0.0176342, 0.451233));
+input_particles.push_back(fastjet::PseudoJet(-0.0476977, 0.641147, 0.000549785, 0.657894));
+input_particles.push_back(fastjet::PseudoJet(0.0210548, 1.36468, 0.0461271, 1.37273));
+input_particles.push_back(fastjet::PseudoJet(-0.195101, 0.24718, 0.0406984, 0.346841));
+input_particles.push_back(fastjet::PseudoJet(0.152453, 0.214002, 0.0597933, 0.30347));
+input_particles.push_back(fastjet::PseudoJet(0.0311818, 0.660833, 0.161101, 0.695058));
+input_particles.push_back(fastjet::PseudoJet(-0.183442, 0.166466, 0.0625012, 0.291115));
+input_particles.push_back(fastjet::PseudoJet(0.0849032, 1.0256, 0.542139, 1.17152));
+input_particles.push_back(fastjet::PseudoJet(-0.143459, 0.248375, 0.156066, 0.355115));
+input_particles.push_back(fastjet::PseudoJet(0.100485, 0.85838, 0.551104, 1.03446));
+input_particles.push_back(fastjet::PseudoJet(-0.100134, 0.235964, 0.175406, 0.340519));
+input_particles.push_back(fastjet::PseudoJet(-0.156699, 0.756415, 0.679343, 1.03813));
+input_particles.push_back(fastjet::PseudoJet(-0.448164, 0.40404, -0.500885, 0.796533));
+input_particles.push_back(fastjet::PseudoJet(-0.374314, 0.448685, -0.426309, 0.736647));
+input_particles.push_back(fastjet::PseudoJet(0.00186941, 0.256631, -0.171233, 0.33862));
+input_particles.push_back(fastjet::PseudoJet(-0.265451, 0.323745, -0.271467, 0.518121));
+input_particles.push_back(fastjet::PseudoJet(-0.306225, 0.384938, -0.304212, 0.594959));
+input_particles.push_back(fastjet::PseudoJet(0.0185632, 0.228147, -0.13063, 0.298227));
+input_particles.push_back(fastjet::PseudoJet(0.0499741, 0.277161, -0.150969, 0.348693));
+input_particles.push_back(fastjet::PseudoJet(-0.169573, 0.410732, -0.226674, 0.517993));
+input_particles.push_back(fastjet::PseudoJet(-0.0482731, 0.510241, -0.266989, 0.594507));
+input_particles.push_back(fastjet::PseudoJet(-0.465565, 0.470043, -0.31732, 0.746902));
+input_particles.push_back(fastjet::PseudoJet(-0.171194, 0.435201, -0.199894, 0.527395));
+input_particles.push_back(fastjet::PseudoJet(-0.248964, 0.212654, -0.132046, 0.379633));
+input_particles.push_back(fastjet::PseudoJet(-0.326058, 0.195337, -0.137464, 0.427605));
+input_particles.push_back(fastjet::PseudoJet(-0.53961, 0.616471, -0.27592, 0.875687));
+input_particles.push_back(fastjet::PseudoJet(-0.957952, 1.31025, -0.4757, 1.69711));
+input_particles.push_back(fastjet::PseudoJet(-0.977609, 1.49291, -0.476188, 1.85223));
+input_particles.push_back(fastjet::PseudoJet(0.0157058, 0.307397, -0.0602731, 0.343296));
+input_particles.push_back(fastjet::PseudoJet(-0.334065, 0.408901, -0.0571391, 0.549131));
+input_particles.push_back(fastjet::PseudoJet(-0.0505558, 0.442215, -0.0176857, 0.4668));
+input_particles.push_back(fastjet::PseudoJet(-0.249885, 0.0921008, 0.0390728, 0.303202));
+input_particles.push_back(fastjet::PseudoJet(-0.490067, 0.522615, 0.145251, 0.744224));
+input_particles.push_back(fastjet::PseudoJet(-0.276455, 0.560001, 0.138977, 0.654846));
+input_particles.push_back(fastjet::PseudoJet(-0.209548, 0.171151, 0.0806984, 0.314953));
+input_particles.push_back(fastjet::PseudoJet(-0.34229, 0.695601, 0.281938, 0.836655));
+input_particles.push_back(fastjet::PseudoJet(-0.00825532, 0.345261, 0.172977, 0.4107));
+input_particles.push_back(fastjet::PseudoJet(-0.0800055, 0.383199, -0.0138599, 0.415829));
+input_particles.push_back(fastjet::PseudoJet(-0.608238, 0.928939, 0.764361, 1.35522));
+input_particles.push_back(fastjet::PseudoJet(-0.367707, 0.603485, 0.517871, 0.887171));
+input_particles.push_back(fastjet::PseudoJet(-0.48031, 0.894127, 0.760598, 1.27599));
+input_particles.push_back(fastjet::PseudoJet(-0.512694, 0.498288, 0.552595, 0.914323));
+input_particles.push_back(fastjet::PseudoJet(-0.811683, 0.683096, 0.857082, 1.37096));
+input_particles.push_back(fastjet::PseudoJet(-0.0857382, 0.551356, 0.501998, 0.76343));
+input_particles.push_back(fastjet::PseudoJet(-0.163638, 0.195973, -0.239527, 0.376876));
+input_particles.push_back(fastjet::PseudoJet(-0.338101, 0.454602, -0.534074, 0.791005));
+input_particles.push_back(fastjet::PseudoJet(-0.502944, 0.137737, -0.450129, 0.702865));
+input_particles.push_back(fastjet::PseudoJet(-0.210414, 0.235662, -0.181966, 0.390387));
+input_particles.push_back(fastjet::PseudoJet(-0.353983, 0.477434, -0.336137, 0.696933));
+input_particles.push_back(fastjet::PseudoJet(-0.585942, 0.517933, -0.446658, 0.911354));
+input_particles.push_back(fastjet::PseudoJet(-1.12138, 0.640103, -0.556413, 1.4129));
+input_particles.push_back(fastjet::PseudoJet(-0.356059, 0.412091, -0.140524, 0.579503));
+input_particles.push_back(fastjet::PseudoJet(-0.609438, 0.298531, -0.154665, 0.709885));
+input_particles.push_back(fastjet::PseudoJet(-0.582662, 0.36869, -0.0479499, 0.705129));
+input_particles.push_back(fastjet::PseudoJet(-0.292529, -0.0518231, -0.00165412, 0.328239));
+input_particles.push_back(fastjet::PseudoJet(-0.556117, 0.374545, -0.00102827, 0.684858));
+input_particles.push_back(fastjet::PseudoJet(-1.23865, 0.504279, 0.0249868, 1.34487));
+input_particles.push_back(fastjet::PseudoJet(-0.634007, 0.239291, 0.0479765, 0.693547));
+input_particles.push_back(fastjet::PseudoJet(-0.164883, 0.248723, 0.0297763, 0.330781));
+input_particles.push_back(fastjet::PseudoJet(-0.530141, 0.53153, 0.17671, 0.78376));
+input_particles.push_back(fastjet::PseudoJet(-0.685702, 0.217097, 0.190333, 0.756984));
+input_particles.push_back(fastjet::PseudoJet(-1.19356, 0.685702, 0.395453, 1.43897));
+input_particles.push_back(fastjet::PseudoJet(-0.730686, 0.397201, 0.278961, 0.88824));
+input_particles.push_back(fastjet::PseudoJet(-0.149595, 0.2338, 0.0912561, 0.323803));
+input_particles.push_back(fastjet::PseudoJet(-0.44905, 0.212756, 0.221792, 0.561767));
+input_particles.push_back(fastjet::PseudoJet(-0.138649, 0.229353, 0.133644, 0.330404));
+input_particles.push_back(fastjet::PseudoJet(-0.453051, 0.18559, 0.28591, 0.583886));
+input_particles.push_back(fastjet::PseudoJet(-0.883375, 0.407139, 0.592674, 1.14754));
+input_particles.push_back(fastjet::PseudoJet(-0.202242, -0.0134925, 0.131768, 0.279153));
+input_particles.push_back(fastjet::PseudoJet(-1.77742, 0.711002, 1.67262, 2.54595));
+input_particles.push_back(fastjet::PseudoJet(-0.279741, 0.403983, 0.454769, 0.683924));
+input_particles.push_back(fastjet::PseudoJet(-0.226731, -0.138497, -0.251433, 0.391518));
+input_particles.push_back(fastjet::PseudoJet(-0.569265, -0.267783, -0.62068, 0.894703));
+input_particles.push_back(fastjet::PseudoJet(-0.255458, -0.129176, -0.250863, 0.405409));
+input_particles.push_back(fastjet::PseudoJet(-1.26724, -0.0928986, -1.14615, 1.71688));
+input_particles.push_back(fastjet::PseudoJet(-0.22861, 0.194507, -0.206585, 0.390196));
+input_particles.push_back(fastjet::PseudoJet(-0.856738, -0.0122238, -0.397444, 0.954773));
+input_particles.push_back(fastjet::PseudoJet(-0.315674, 0.138223, -0.118938, 0.390361));
+input_particles.push_back(fastjet::PseudoJet(-0.433048, 0.178689, -0.153916, 0.512474));
+input_particles.push_back(fastjet::PseudoJet(-0.300538, -0.160441, -0.113116, 0.385149));
+input_particles.push_back(fastjet::PseudoJet(-0.521019, -0.235887, -0.17001, 0.61277));
+input_particles.push_back(fastjet::PseudoJet(-0.428631, 0.119913, -0.102869, 0.477667));
+input_particles.push_back(fastjet::PseudoJet(-0.370477, -0.171285, -0.0917357, 0.441007));
+input_particles.push_back(fastjet::PseudoJet(-0.680549, -0.0864058, -0.154704, 0.716956));
+input_particles.push_back(fastjet::PseudoJet(-0.311007, 0.173163, -0.0602514, 0.387067));
+input_particles.push_back(fastjet::PseudoJet(-0.675551, 0.0219193, 0.0255243, 0.690638));
+input_particles.push_back(fastjet::PseudoJet(-0.311766, -0.119085, 0.0355449, 0.363487));
+input_particles.push_back(fastjet::PseudoJet(-0.749121, 0.11487, 0.105222, 0.777772));
+input_particles.push_back(fastjet::PseudoJet(-0.177042, 0.119917, 0.0312422, 0.257254));
+input_particles.push_back(fastjet::PseudoJet(-0.325328, 0.18289, 0.0731418, 0.405113));
+input_particles.push_back(fastjet::PseudoJet(-0.193684, 0.13805, 0.0424653, 0.279024));
+input_particles.push_back(fastjet::PseudoJet(-0.604098, 0.194259, 0.149827, 0.666782));
+input_particles.push_back(fastjet::PseudoJet(-0.790607, -0.327363, 0.340559, 0.931497));
+input_particles.push_back(fastjet::PseudoJet(-0.345262, 0.188705, 0.188652, 0.458132));
+input_particles.push_back(fastjet::PseudoJet(-0.50193, 0.202725, 0.286349, 0.628098));
+input_particles.push_back(fastjet::PseudoJet(-0.597271, -0.0141113, 0.310621, 0.687675));
+input_particles.push_back(fastjet::PseudoJet(-0.282884, 0.0974469, 0.162972, 0.368183));
+input_particles.push_back(fastjet::PseudoJet(-0.150119, 0.154091, 0.119192, 0.282783));
+input_particles.push_back(fastjet::PseudoJet(-1.26918, -0.104028, 1.04209, 1.65138));
+input_particles.push_back(fastjet::PseudoJet(-1.09098, -0.41071, -1.16841, 1.65637));
+input_particles.push_back(fastjet::PseudoJet(-0.560683, -0.486785, -0.682143, 1.0179));
+input_particles.push_back(fastjet::PseudoJet(-1.85199, -0.786715, -1.65789, 2.61091));
+input_particles.push_back(fastjet::PseudoJet(-1.1903, -0.657149, -0.919269, 1.64718));
+input_particles.push_back(fastjet::PseudoJet(-0.257218, 0.0185826, -0.173337, 0.340634));
+input_particles.push_back(fastjet::PseudoJet(-0.485062, -0.199382, -0.303022, 0.621563));
+input_particles.push_back(fastjet::PseudoJet(-0.958552, -0.553855, -0.500029, 1.22274));
+input_particles.push_back(fastjet::PseudoJet(-0.387946, -0.331442, -0.163268, 0.553617));
+input_particles.push_back(fastjet::PseudoJet(-0.20357, -0.274041, -0.0940616, 0.380613));
+input_particles.push_back(fastjet::PseudoJet(-0.315098, -0.0649505, -0.0643585, 0.356549));
+input_particles.push_back(fastjet::PseudoJet(-0.184179, -0.243602, -0.0286047, 0.33699));
+input_particles.push_back(fastjet::PseudoJet(-0.14221, -0.231077, -0.00791156, 0.305226));
+input_particles.push_back(fastjet::PseudoJet(-1.48129, -0.311036, 0.0730771, 1.52177));
+input_particles.push_back(fastjet::PseudoJet(-0.174445, -0.254877, 0.0245157, 0.339815));
+input_particles.push_back(fastjet::PseudoJet(-0.344317, -0.0540245, 0.036371, 0.377194));
+input_particles.push_back(fastjet::PseudoJet(-0.179404, -0.316325, 0.109507, 0.404622));
+input_particles.push_back(fastjet::PseudoJet(-0.278832, 0.0273101, 0.095947, 0.327382));
+input_particles.push_back(fastjet::PseudoJet(-1.29712, -0.888313, 0.532178, 1.66563));
+input_particles.push_back(fastjet::PseudoJet(-0.734756, -0.131519, 0.266542, 0.804791));
+input_particles.push_back(fastjet::PseudoJet(-0.352647, -0.436994, 0.229493, 0.622471));
+input_particles.push_back(fastjet::PseudoJet(-0.141496, -0.27833, 0.146235, 0.371959));
+input_particles.push_back(fastjet::PseudoJet(-0.450645, -0.469297, 0.321081, 0.738846));
+input_particles.push_back(fastjet::PseudoJet(-0.992618, -0.557196, 0.715888, 1.35194));
+input_particles.push_back(fastjet::PseudoJet(-0.419211, -0.117131, 0.264797, 0.528256));
+input_particles.push_back(fastjet::PseudoJet(-0.392692, -0.117408, 0.281535, 0.516463));
+input_particles.push_back(fastjet::PseudoJet(-0.75436, -0.636935, 0.829481, 1.29702));
+input_particles.push_back(fastjet::PseudoJet(-0.304906, -0.472662, 0.525727, 0.782462));
+input_particles.push_back(fastjet::PseudoJet(-0.25684, -0.0166222, 0.233504, 0.374495));
+input_particles.push_back(fastjet::PseudoJet(-1.00095, -1.07756, 1.41319, 2.04441));
+input_particles.push_back(fastjet::PseudoJet(-0.88162, -1.11402, -1.43508, 2.02416));
+input_particles.push_back(fastjet::PseudoJet(-0.0145468, -0.266324, -0.219528, 0.372575));
+input_particles.push_back(fastjet::PseudoJet(-0.560756, -1.65397, -1.42133, 2.25604));
+input_particles.push_back(fastjet::PseudoJet(0.0166324, -0.363837, -0.245939, 0.461107));
+input_particles.push_back(fastjet::PseudoJet(-0.0165693, -0.307786, -0.143956, 0.367709));
+input_particles.push_back(fastjet::PseudoJet(-0.220322, -0.616674, -0.285593, 0.727923));
+input_particles.push_back(fastjet::PseudoJet(-0.0185142, -0.320269, -0.12988, 0.37318));
+input_particles.push_back(fastjet::PseudoJet(-0.00516651, -0.488216, -0.188796, 0.541761));
+input_particles.push_back(fastjet::PseudoJet(-0.402601, -0.504987, -0.14751, 0.677007));
+input_particles.push_back(fastjet::PseudoJet(-0.598269, -0.895443, -0.144538, 1.0955));
+input_particles.push_back(fastjet::PseudoJet(-0.290045, -1.3229, -0.1549, 1.37028));
+input_particles.push_back(fastjet::PseudoJet(-0.435875, -0.297989, -0.0608555, 0.549516));
+input_particles.push_back(fastjet::PseudoJet(0.0557016, -0.251652, 0.0198201, 0.293775));
+input_particles.push_back(fastjet::PseudoJet(-0.33028, -0.951277, 0.118285, 1.02347));
+input_particles.push_back(fastjet::PseudoJet(-0.484956, -0.319381, 0.1825, 0.624477));
+input_particles.push_back(fastjet::PseudoJet(-0.0441978, -0.28277, 0.117603, 0.339444));
+input_particles.push_back(fastjet::PseudoJet(-0.296059, -0.225803, 0.18286, 0.437671));
+input_particles.push_back(fastjet::PseudoJet(-0.368784, -0.245737, 0.228714, 0.517859));
+input_particles.push_back(fastjet::PseudoJet(-0.268364, -0.198299, 0.189386, 0.408275));
+input_particles.push_back(fastjet::PseudoJet(-0.271712, -1.19575, 0.731135, 1.43446));
+input_particles.push_back(fastjet::PseudoJet(-0.123347, -0.41941, 0.31079, 0.554246));
+input_particles.push_back(fastjet::PseudoJet(0.110681, -0.286465, -0.285415, 0.441876));
+input_particles.push_back(fastjet::PseudoJet(-0.247807, -0.978272, -0.952773, 1.39488));
+input_particles.push_back(fastjet::PseudoJet(-0.196894, -0.262733, -0.22992, 0.424428));
+input_particles.push_back(fastjet::PseudoJet(-0.160558, -1.02967, -0.746222, 1.28931));
+input_particles.push_back(fastjet::PseudoJet(0.149694, -0.579972, -0.405446, 0.736642));
+input_particles.push_back(fastjet::PseudoJet(0.0807053, -0.839707, -0.558541, 1.02131));
+input_particles.push_back(fastjet::PseudoJet(-0.123658, -0.478635, -0.30395, 0.596865));
+input_particles.push_back(fastjet::PseudoJet(-0.0713733, -0.650216, -0.383693, 0.771087));
+input_particles.push_back(fastjet::PseudoJet(-0.017384, -0.775829, -0.291568, 0.840657));
+input_particles.push_back(fastjet::PseudoJet(0.105807, -0.764631, -0.288268, 0.835724));
+input_particles.push_back(fastjet::PseudoJet(0.147337, -0.349288, -0.133898, 0.425581));
+input_particles.push_back(fastjet::PseudoJet(0.171922, -1.16184, -0.328496, 1.22753));
+input_particles.push_back(fastjet::PseudoJet(0.169002, -0.286519, -0.0634856, 0.366286));
+input_particles.push_back(fastjet::PseudoJet(-0.201152, -0.380615, -0.0420658, 0.45451));
+input_particles.push_back(fastjet::PseudoJet(0.138367, -0.546878, 0.0353163, 0.582193));
+input_particles.push_back(fastjet::PseudoJet(-0.138706, -0.264665, 0.039123, 0.33211));
+input_particles.push_back(fastjet::PseudoJet(0.0045048, -0.654323, 0.127666, 0.681129));
+input_particles.push_back(fastjet::PseudoJet(0.205878, -1.18406, 0.269046, 1.23945));
+input_particles.push_back(fastjet::PseudoJet(-0.0294299, -0.510489, 0.133383, 0.546568));
+input_particles.push_back(fastjet::PseudoJet(0.250332, -0.586099, 0.19205, 0.680104));
+input_particles.push_back(fastjet::PseudoJet(0.206116, -0.64065, 0.280802, 0.742459));
+input_particles.push_back(fastjet::PseudoJet(0.0393283, -0.891057, 0.41206, 0.992372));
+input_particles.push_back(fastjet::PseudoJet(0.120777, -0.224353, 0.127695, 0.317344));
+input_particles.push_back(fastjet::PseudoJet(-0.14038, -0.402809, 0.294368, 0.536744));
+input_particles.push_back(fastjet::PseudoJet(-0.150642, -0.666074, 0.51399, 0.866033));
+input_particles.push_back(fastjet::PseudoJet(-0.290436, -0.796003, 0.67625, 1.09305));
+input_particles.push_back(fastjet::PseudoJet(-0.199829, -0.277999, 0.31559, 0.486098));
+input_particles.push_back(fastjet::PseudoJet(-0.728499, -2.63281, 2.72414, 3.86042));
+input_particles.push_back(fastjet::PseudoJet(0.171547, -0.343715, 0.381573, 0.559147));
+input_particles.push_back(fastjet::PseudoJet(0.256486, -0.109926, -0.243375, 0.395702));
+input_particles.push_back(fastjet::PseudoJet(0.0556759, -0.409173, -0.351384, 0.559886));
+input_particles.push_back(fastjet::PseudoJet(0.1277, -0.445914, -0.372658, 0.611147));
+input_particles.push_back(fastjet::PseudoJet(-0.0505416, -0.217716, -0.164056, 0.310401));
+input_particles.push_back(fastjet::PseudoJet(0.425555, -0.71633, -0.631942, 1.05501));
+input_particles.push_back(fastjet::PseudoJet(0.515564, -0.723036, -0.582813, 1.07133));
+input_particles.push_back(fastjet::PseudoJet(0.503217, -0.400685, -0.414389, 0.777801));
+input_particles.push_back(fastjet::PseudoJet(0.548974, -0.796447, -0.541239, 1.11719));
+input_particles.push_back(fastjet::PseudoJet(0.39585, -0.375919, -0.297983, 0.637405));
+input_particles.push_back(fastjet::PseudoJet(0.255227, -0.178997, -0.150788, 0.373359));
+input_particles.push_back(fastjet::PseudoJet(0.648693, -0.633193, -0.416062, 1.00714));
+input_particles.push_back(fastjet::PseudoJet(0.124583, -0.379123, -0.13695, 0.444398));
+input_particles.push_back(fastjet::PseudoJet(0.257473, -0.304346, -0.131431, 0.442349));
+input_particles.push_back(fastjet::PseudoJet(0.284732, -0.246927, -0.057516, 0.405996));
+input_particles.push_back(fastjet::PseudoJet(0.506968, -0.51864, -0.0544163, 0.740571));
+input_particles.push_back(fastjet::PseudoJet(0.466816, -0.564067, -0.0196484, 0.745624));
+input_particles.push_back(fastjet::PseudoJet(-0.000939839, -0.386176, 0.0512944, 0.413816));
+input_particles.push_back(fastjet::PseudoJet(0.393679, -0.530829, 0.100837, 0.682942));
+input_particles.push_back(fastjet::PseudoJet(0.454963, -0.332644, 0.217727, 0.620103));
+input_particles.push_back(fastjet::PseudoJet(-0.0573108, -0.207335, 0.0833752, 0.269636));
+input_particles.push_back(fastjet::PseudoJet(0.43473, -0.266002, 0.211226, 0.569072));
+input_particles.push_back(fastjet::PseudoJet(0.277919, -0.373236, 0.211132, 0.529718));
+input_particles.push_back(fastjet::PseudoJet(0.00250699, -0.329393, 0.177886, 0.399536));
+input_particles.push_back(fastjet::PseudoJet(-0.0591934, -0.209397, 0.154729, 0.301284));
+input_particles.push_back(fastjet::PseudoJet(0.00567918, -0.333668, 0.25549, 0.442856));
+input_particles.push_back(fastjet::PseudoJet(0.0567817, -0.569476, 0.496877, 0.770645));
+input_particles.push_back(fastjet::PseudoJet(0.0740569, -0.56243, 0.502188, 0.770379));
+input_particles.push_back(fastjet::PseudoJet(0.209717, -1.02122, 0.995343, 1.44813));
+input_particles.push_back(fastjet::PseudoJet(0.213733, -0.0697963, 0.203991, 0.334134));
+input_particles.push_back(fastjet::PseudoJet(0.412462, -0.319286, -0.517908, 0.748182));
+input_particles.push_back(fastjet::PseudoJet(0.572177, -0.340503, -0.529094, 0.861829));
+input_particles.push_back(fastjet::PseudoJet(0.668354, -0.5678, -0.684635, 1.12129));
+input_particles.push_back(fastjet::PseudoJet(0.702254, -0.211895, -0.410435, 0.852055));
+input_particles.push_back(fastjet::PseudoJet(0.569638, -0.613409, -0.415439, 0.944895));
+input_particles.push_back(fastjet::PseudoJet(0.767411, -0.302479, -0.357893, 0.909934));
+input_particles.push_back(fastjet::PseudoJet(0.413249, -0.159535, -0.184715, 0.499825));
+input_particles.push_back(fastjet::PseudoJet(2.15269, -0.927737, -0.950962, 2.53349));
+input_particles.push_back(fastjet::PseudoJet(0.213578, -0.294873, -0.0679793, 0.395811));
+input_particles.push_back(fastjet::PseudoJet(0.527269, -0.622863, 0.115472, 0.835933));
+input_particles.push_back(fastjet::PseudoJet(0.226267, -0.266062, 0.104019, 0.390238));
+input_particles.push_back(fastjet::PseudoJet(1.00178, -0.646296, 0.507546, 1.3032));
+input_particles.push_back(fastjet::PseudoJet(0.603476, -0.723526, 0.450195, 1.05348));
+input_particles.push_back(fastjet::PseudoJet(0.410443, -0.273322, 0.274963, 0.581595));
+input_particles.push_back(fastjet::PseudoJet(0.534783, -0.0451805, 0.405744, 0.687126));
+input_particles.push_back(fastjet::PseudoJet(0.396969, -0.0647, 0.353651, 0.553461));
+input_particles.push_back(fastjet::PseudoJet(1.24399, -0.286943, 1.11125, 1.69829));
+input_particles.push_back(fastjet::PseudoJet(2.03051, -1.15503, 2.29401, 3.27705));
+input_particles.push_back(fastjet::PseudoJet(0.568703, -0.162942, 0.60345, 0.856507));
+input_particles.push_back(fastjet::PseudoJet(0.900958, -0.0324416, -0.898339, 1.28034));
+input_particles.push_back(fastjet::PseudoJet(0.861199, -0.0559485, -0.780105, 1.17168));
+input_particles.push_back(fastjet::PseudoJet(0.293165, -0.0810275, -0.250197, 0.417839));
+input_particles.push_back(fastjet::PseudoJet(0.943455, -0.228317, -0.764366, 1.24337));
+input_particles.push_back(fastjet::PseudoJet(0.474773, -0.100567, -0.37066, 0.626412));
+input_particles.push_back(fastjet::PseudoJet(0.179712, -0.16998, -0.164168, 0.328056));
+input_particles.push_back(fastjet::PseudoJet(0.168071, -0.127071, -0.141982, 0.289886));
+input_particles.push_back(fastjet::PseudoJet(1.07211, 0.0267573, -0.725177, 1.30212));
+input_particles.push_back(fastjet::PseudoJet(0.254895, 0.213335, -0.18794, 0.406552));
+input_particles.push_back(fastjet::PseudoJet(1.01546, -0.333379, -0.375453, 1.14138));
+input_particles.push_back(fastjet::PseudoJet(0.4602, 0.0859269, -0.0392131, 0.490087));
+input_particles.push_back(fastjet::PseudoJet(0.398985, 0.223804, 0.00329125, 0.478297));
+input_particles.push_back(fastjet::PseudoJet(0.550704, 0.153505, 0.00812046, 0.588544));
+input_particles.push_back(fastjet::PseudoJet(0.8871, -0.0831777, 0.165056, 0.916836));
+input_particles.push_back(fastjet::PseudoJet(0.219704, -0.125695, 0.0518025, 0.293653));
+input_particles.push_back(fastjet::PseudoJet(0.432858, -0.211856, 0.109863, 0.513613));
+input_particles.push_back(fastjet::PseudoJet(0.430835, -0.0952459, 0.101638, 0.473815));
+input_particles.push_back(fastjet::PseudoJet(0.259193, 0.156046, 0.08143, 0.34299));
+input_particles.push_back(fastjet::PseudoJet(0.479825, -0.143229, 0.131533, 0.536216));
+input_particles.push_back(fastjet::PseudoJet(0.743916, 0.157095, 0.220434, 0.803841));
+input_particles.push_back(fastjet::PseudoJet(0.965055, -0.24041, 0.354864, 1.06515));
+input_particles.push_back(fastjet::PseudoJet(0.552483, -0.0351519, 0.202238, 0.605684));
+input_particles.push_back(fastjet::PseudoJet(0.665757, -0.185329, 0.384463, 0.803038));
+input_particles.push_back(fastjet::PseudoJet(0.74013, -0.015068, 0.626899, 0.980052));
+input_particles.push_back(fastjet::PseudoJet(0.347455, 0.109307, 0.316812, 0.502516));
+input_particles.push_back(fastjet::PseudoJet(0.887712, -0.0886679, 0.882786, 1.26281));
+input_particles.push_back(fastjet::PseudoJet(0.389656, 0.038515, -0.342253, 0.538454));
+input_particles.push_back(fastjet::PseudoJet(1.93418, 0.999244, -1.89569, 2.8901));
+input_particles.push_back(fastjet::PseudoJet(0.470407, 0.0933214, -0.156764, 0.523494));
+input_particles.push_back(fastjet::PseudoJet(1.35644, 0.69788, 1.54714, 2.17717));
+input_particles.push_back(fastjet::PseudoJet(0.472557, 0.687874, -0.485581, 0.975577));
+input_particles.push_back(fastjet::PseudoJet(0.311952, 0.174523, 0.330652, 0.50654));
+input_particles.push_back(fastjet::PseudoJet(-0.223348, 0.4116, -0.0580911, 0.492091));
+input_particles.push_back(fastjet::PseudoJet(-0.0669509, 0.487792, -0.043798, 0.513635));
+input_particles.push_back(fastjet::PseudoJet(-0.103997, 0.242965, 0.0538086, 0.303681));
+input_particles.push_back(fastjet::PseudoJet(0.0741124, 0.591397, 0.246373, 0.659866));
+input_particles.push_back(fastjet::PseudoJet(-0.117755, 0.478665, 0.209226, 0.553391));
+input_particles.push_back(fastjet::PseudoJet(0.127824, 0.334545, 0.361504, 0.52766));
+input_particles.push_back(fastjet::PseudoJet(-0.497461, 1.75497, -1.65359, 2.46601));
+input_particles.push_back(fastjet::PseudoJet(-0.554844, 0.420902, 0.00695663, 0.710309));
+input_particles.push_back(fastjet::PseudoJet(-0.0576326, 0.323584, 0.0720967, 0.364288));
+input_particles.push_back(fastjet::PseudoJet(-0.130694, 0.243936, -0.0954555, 0.32431));
+input_particles.push_back(fastjet::PseudoJet(-0.525977, 0.418383, 0.0240858, 0.686845));
+input_particles.push_back(fastjet::PseudoJet(-0.428441, 0.403134, 0.182543, 0.63157));
+input_particles.push_back(fastjet::PseudoJet(-0.631001, 0.0516574, 0.310567, 0.718862));
+input_particles.push_back(fastjet::PseudoJet(-0.283342, 0.048318, 0.157027, 0.356026));
+input_particles.push_back(fastjet::PseudoJet(-0.723107, 0.333873, 0.645939, 1.03493));
+input_particles.push_back(fastjet::PseudoJet(-0.514786, 0.0257669, -0.438113, 0.690718));
+input_particles.push_back(fastjet::PseudoJet(-0.439046, 0.0878723, 0.369336, 0.596969));
+input_particles.push_back(fastjet::PseudoJet(-0.30624, -0.0991541, 0.297755, 0.460166));
+input_particles.push_back(fastjet::PseudoJet(-0.389628, -0.127866, -0.412537, 0.598186));
+input_particles.push_back(fastjet::PseudoJet(-0.3913, -0.0605506, -0.147895, 0.445123));
+input_particles.push_back(fastjet::PseudoJet(-0.312283, -0.276327, -0.410806, 0.601763));
+input_particles.push_back(fastjet::PseudoJet(0.0453041, -0.231026, 0.159585, 0.316816));
+input_particles.push_back(fastjet::PseudoJet(-0.0437868, -0.700371, -0.452945, 0.846803));
+input_particles.push_back(fastjet::PseudoJet(0.0475165, -0.405308, -0.0206501, 0.431785));
+input_particles.push_back(fastjet::PseudoJet(-0.100654, -0.401833, 0.183543, 0.474098));
+input_particles.push_back(fastjet::PseudoJet(0.348879, -1.2221, 0.0652694, 1.28023));
+input_particles.push_back(fastjet::PseudoJet(0.306658, -0.483328, 0.0612915, 0.592352));
+input_particles.push_back(fastjet::PseudoJet(0.681384, -0.810493, 0.715456, 1.28551));
+input_particles.push_back(fastjet::PseudoJet(0.439154, -0.122181, 0.33399, 0.582077));
+input_particles.push_back(fastjet::PseudoJet(0.522111, -0.528042, 0.568312, 0.945456));
+input_particles.push_back(fastjet::PseudoJet(0.505676, -0.0228833, 0.0549967, 0.527955));
+input_particles.push_back(fastjet::PseudoJet(0.449918, 0.126145, 0.32743, 0.587392));
+input_particles.push_back(fastjet::PseudoJet(0.297545, 0.474931, -0.438775, 0.725324));
+input_particles.push_back(fastjet::PseudoJet(0.553139, 0.320999, -0.487954, 0.816444));
+input_particles.push_back(fastjet::PseudoJet(0.623326, 0.40768, -0.0781952, 0.761795));
+input_particles.push_back(fastjet::PseudoJet(-0.207701, 1.55313, 0.225319, 1.58922));
+input_particles.push_back(fastjet::PseudoJet(0.109134, 1.85817, 1.47415, 2.37851));
+input_particles.push_back(fastjet::PseudoJet(-0.148226, 0.796099, 0.768591, 1.12515));
+input_particles.push_back(fastjet::PseudoJet(-0.236269, -0.044857, -0.167383, 0.324549));
+input_particles.push_back(fastjet::PseudoJet(-0.967374, 0.649101, -0.553591, 1.29734));
+input_particles.push_back(fastjet::PseudoJet(-0.767957, 0.196703, -0.374424, 0.887763));
+input_particles.push_back(fastjet::PseudoJet(-0.251709, 0.273389, -0.111839, 0.412415));
+input_particles.push_back(fastjet::PseudoJet(-0.277996, 0.0691089, -0.0659231, 0.325397));
+input_particles.push_back(fastjet::PseudoJet(-0.429428, 0.203934, 0.0936685, 0.504233));
+input_particles.push_back(fastjet::PseudoJet(-0.836156, 0.517893, 0.49028, 1.1078));
+input_particles.push_back(fastjet::PseudoJet(-0.721652, 0.0235229, 0.122691, 0.745565));
+input_particles.push_back(fastjet::PseudoJet(-0.622663, -0.558114, -0.690159, 1.09316));
+input_particles.push_back(fastjet::PseudoJet(-0.204556, -0.237043, 0.042169, 0.345385));
+input_particles.push_back(fastjet::PseudoJet(0.0481542, -0.211212, 0.160446, 0.303565));
+input_particles.push_back(fastjet::PseudoJet(-0.0985759, -0.352042, 0.108135, 0.405985));
+input_particles.push_back(fastjet::PseudoJet(0.111727, -0.382434, 0.220977, 0.476497));
+input_particles.push_back(fastjet::PseudoJet(0.279974, -1.00856, -0.500297, 1.16848));
+input_particles.push_back(fastjet::PseudoJet(0.0483933, -0.360053, -0.0989368, 0.401557));
+input_particles.push_back(fastjet::PseudoJet(0.278994, -0.198025, -0.0183597, 0.369957));
+input_particles.push_back(fastjet::PseudoJet(0.542018, -0.261367, 0.516872, 0.80544));
+input_particles.push_back(fastjet::PseudoJet(0.617205, -0.118797, -0.669223, 0.928652));
+input_particles.push_back(fastjet::PseudoJet(0.499791, 0.0377131, -0.0163841, 0.52054));
+input_particles.push_back(fastjet::PseudoJet(0.421598, 0.115487, -0.456699, 0.647407));
+input_particles.push_back(fastjet::PseudoJet(0.37096, 0.311469, 0.495545, 0.706873));
+input_particles.push_back(fastjet::PseudoJet(0.146757, 0.521979, -0.171944, 0.5857));
+input_particles.push_back(fastjet::PseudoJet(0.177351, 0.706174, 0.290349, 0.79619));
+input_particles.push_back(fastjet::PseudoJet(-0.0170484, 0.434418, -0.448152, 0.639789));
+input_particles.push_back(fastjet::PseudoJet(-0.533333, 0.506504, 0.605856, 0.963084));
+input_particles.push_back(fastjet::PseudoJet(-0.0018591, 0.213475, 0.185571, 0.315423));
+input_particles.push_back(fastjet::PseudoJet(-0.473369, 0.472846, -0.349904, 0.767837));
+input_particles.push_back(fastjet::PseudoJet(-0.155753, 0.306245, 0.132532, 0.393814));
+input_particles.push_back(fastjet::PseudoJet(-0.443117, -0.0429638, -0.459145, 0.654593));
+input_particles.push_back(fastjet::PseudoJet(-1.59786, -0.651734, -1.26367, 2.14342));
+input_particles.push_back(fastjet::PseudoJet(-0.501066, -0.487706, 0.242585, 0.753161));
+input_particles.push_back(fastjet::PseudoJet(-1.20046, -0.309388, 0.863746, 1.51736));
+input_particles.push_back(fastjet::PseudoJet(-0.479717, -0.917014, -0.98968, 1.43875));
+input_particles.push_back(fastjet::PseudoJet(0.0423441, -0.216676, -0.0488888, 0.265728));
+input_particles.push_back(fastjet::PseudoJet(-0.212706, -0.0564132, 0.218268, 0.339922));
+input_particles.push_back(fastjet::PseudoJet(-0.0183839, -0.589287, -0.287873, 0.670781));
+input_particles.push_back(fastjet::PseudoJet(-0.0618932, -0.698556, -0.315442, 0.781533));
+input_particles.push_back(fastjet::PseudoJet(-0.276112, -0.61265, 0.374233, 0.781734));
+input_particles.push_back(fastjet::PseudoJet(0.398343, -0.186736, -0.415448, 0.620987));
+input_particles.push_back(fastjet::PseudoJet(0.508716, -0.613348, -0.298414, 0.862275));
+input_particles.push_back(fastjet::PseudoJet(0.247125, 0.0829195, -0.13238, 0.323961));
+input_particles.push_back(fastjet::PseudoJet(0.169702, 0.160065, -0.0629911, 0.279047));
+input_particles.push_back(fastjet::PseudoJet(0.366394, -0.124313, 0.228427, 0.470486));
+input_particles.push_back(fastjet::PseudoJet(0.459118, 0.102115, -0.255168, 0.552999));
+input_particles.push_back(fastjet::PseudoJet(0.745121, 0.403726, -0.360528, 0.931483));
+input_particles.push_back(fastjet::PseudoJet(0.252048, 0.0197515, 0.263094, 0.390662));
+input_particles.push_back(fastjet::PseudoJet(0.289362, 0.112745, 0.211116, 0.400614));
+input_particles.push_back(fastjet::PseudoJet(-0.258832, 0.197248, -0.339729, 0.49071));
+input_particles.push_back(fastjet::PseudoJet(-0.182645, 0.0980607, 0.0367254, 0.252594));
+input_particles.push_back(fastjet::PseudoJet(-0.838999, 0.391617, 0.5033, 1.06305));
+input_particles.push_back(fastjet::PseudoJet(-0.856732, 0.533416, 1.06072, 1.47076));
+input_particles.push_back(fastjet::PseudoJet(-0.391669, 0.0788539, 0.416157, 0.593539));
+input_particles.push_back(fastjet::PseudoJet(-0.356709, -0.0621557, 0.382196, 0.544663));
+input_particles.push_back(fastjet::PseudoJet(0.00758573, -0.209098, 0.023019, 0.252565));
+input_particles.push_back(fastjet::PseudoJet(0.185412, -1.09393, 1.04528, 1.53073));
+input_particles.push_back(fastjet::PseudoJet(0.170998, -0.298459, 0.349715, 0.509998));
+input_particles.push_back(fastjet::PseudoJet(0.414041, -0.691371, -0.35884, 0.893124));
+input_particles.push_back(fastjet::PseudoJet(-0.0709966, -0.236436, -0.00540338, 0.283639));
+input_particles.push_back(fastjet::PseudoJet(0.435508, -0.103855, -0.473063, 0.666124));
+input_particles.push_back(fastjet::PseudoJet(0.288021, -0.0858718, -0.151669, 0.364435));
+input_particles.push_back(fastjet::PseudoJet(0.220087, -0.36892, -0.113953, 0.465839));
+input_particles.push_back(fastjet::PseudoJet(1.84818, -1.56287, -0.00736044, 2.42443));
+input_particles.push_back(fastjet::PseudoJet(0.286178, 0.118243, -0.25712, 0.425993));
+input_particles.push_back(fastjet::PseudoJet(0.335928, 0.116111, 0.0672439, 0.387725));
+input_particles.push_back(fastjet::PseudoJet(0.647598, 0.684533, 0.575254, 1.11282));
+input_particles.push_back(fastjet::PseudoJet(-0.0037534, 0.209968, 0.201059, 0.322498));
+input_particles.push_back(fastjet::PseudoJet(-0.331818, -0.0613068, 0.104342, 0.379775));
+input_particles.push_back(fastjet::PseudoJet(-0.831834, -0.337857, -0.977698, 1.33472));
+input_particles.push_back(fastjet::PseudoJet(-0.200027, 0.0638429, -0.189619, 0.315471));
+input_particles.push_back(fastjet::PseudoJet(-0.910468, -0.39885, -0.477263, 1.11144));
+input_particles.push_back(fastjet::PseudoJet(-0.134704, -0.186217, 0.162135, 0.31399));
+input_particles.push_back(fastjet::PseudoJet(-0.100032, -0.829863, -0.176847, 0.865698));
+input_particles.push_back(fastjet::PseudoJet(-0.0805131, -0.32, 0.257455, 0.441186));
+input_particles.push_back(fastjet::PseudoJet(0.14476, -0.241388, 0.256691, 0.405701));
+input_particles.push_back(fastjet::PseudoJet(0.843249, 0.0228857, -0.363739, 0.929181));
+input_particles.push_back(fastjet::PseudoJet(0.203557, 0.136327, 0.227374, 0.362215));
+input_particles.push_back(fastjet::PseudoJet(0.526931, 0.295228, -0.559181, 0.834853));
+input_particles.push_back(fastjet::PseudoJet(0.706372, 0.905654, -0.885388, 1.4569));
+input_particles.push_back(fastjet::PseudoJet(-1.20087, 0.627795, -0.464748, 1.43933));
+input_particles.push_back(fastjet::PseudoJet(-0.187386, -0.0795678, -0.0598353, 0.253978));
+input_particles.push_back(fastjet::PseudoJet(-0.791796, 0.532161, -0.188989, 0.982513));
+input_particles.push_back(fastjet::PseudoJet(-1.41258, -0.742058, 0.0436681, 1.60232));
+input_particles.push_back(fastjet::PseudoJet(-0.731823, -0.502738, 0.143473, 0.91015));
+input_particles.push_back(fastjet::PseudoJet(-0.257676, -0.0536033, 0.101121, 0.314603));
+input_particles.push_back(fastjet::PseudoJet(-0.0331845, -0.31125, 0.235268, 0.415703));
+input_particles.push_back(fastjet::PseudoJet(0.0120816, -0.702492, -0.752901, 1.03922));
+input_particles.push_back(fastjet::PseudoJet(0.076667, -0.82776, 0.0979591, 0.848611));
+input_particles.push_back(fastjet::PseudoJet(-0.154629, -0.292309, 0.349684, 0.501112));
+input_particles.push_back(fastjet::PseudoJet(0.184546, -0.259088, 0.209829, 0.405823));
+input_particles.push_back(fastjet::PseudoJet(0.375066, -0.0974374, -0.17556, 0.447738));
+input_particles.push_back(fastjet::PseudoJet(0.243386, 0.0811809, -0.0924641, 0.30636));
+input_particles.push_back(fastjet::PseudoJet(0.556155, -0.139352, 0.556709, 0.811253));
+input_particles.push_back(fastjet::PseudoJet(0.632623, 0.331964, -0.767901, 1.05809));
+input_particles.push_back(fastjet::PseudoJet(0.376454, 0.248986, -0.441554, 0.646654));
+input_particles.push_back(fastjet::PseudoJet(0.254956, 0.00695731, -0.0345345, 0.292785));
+input_particles.push_back(fastjet::PseudoJet(0.183933, 0.386868, -0.359685, 0.576499));
+input_particles.push_back(fastjet::PseudoJet(0.370311, 0.442372, 0.230804, 0.636846));
+input_particles.push_back(fastjet::PseudoJet(0.07769, 0.276982, 0.182853, 0.368333));
+input_particles.push_back(fastjet::PseudoJet(0.166444, 0.225814, 0.287273, 0.42509));
+input_particles.push_back(fastjet::PseudoJet(-0.741622, -0.665617, -0.160156, 1.01891));
+input_particles.push_back(fastjet::PseudoJet(-0.579614, -0.374911, 0.393533, 0.806758));
+input_particles.push_back(fastjet::PseudoJet(-0.39646, -0.244741, 0.121536, 0.501328));
+input_particles.push_back(fastjet::PseudoJet(0.0597771, -0.532403, 0.548351, 0.779227));
+input_particles.push_back(fastjet::PseudoJet(0.432431, -0.068868, 0.474033, 0.660247));
+input_particles.push_back(fastjet::PseudoJet(0.274727, -0.0703666, 0.0818996, 0.326517));
+input_particles.push_back(fastjet::PseudoJet(0.43186, 0.219956, 0.524581, 0.727701));
+input_particles.push_back(fastjet::PseudoJet(0.20934, 0.109793, -0.0847604, 0.287301));
+input_particles.push_back(fastjet::PseudoJet(0.719171, 1.10041, -0.00116174, 1.32197));
+input_particles.push_back(fastjet::PseudoJet(0.0908267, 0.249759, -0.128757, 0.32663));
+input_particles.push_back(fastjet::PseudoJet(0.039782, 0.503368, -0.195211, 0.559061));
+input_particles.push_back(fastjet::PseudoJet(-0.0254017, 0.230241, -0.194993, 0.333404));
+input_particles.push_back(fastjet::PseudoJet(-0.27987, 0.154854, 0.153371, 0.381195));
+input_particles.push_back(fastjet::PseudoJet(-0.23518, -0.227314, 0.0487101, 0.358934));
+input_particles.push_back(fastjet::PseudoJet(0.181675, -0.621356, -0.722812, 0.980319));
+input_particles.push_back(fastjet::PseudoJet(0.611106, 0.0557616, 0.215085, 0.665057));
+input_particles.push_back(fastjet::PseudoJet(0.872643, -0.0269127, 0.483359, 1.00764));
+input_particles.push_back(fastjet::PseudoJet(0.258651, 0.45862, -0.101742, 0.554133));
+input_particles.push_back(fastjet::PseudoJet(-0.899038, 1.05203, 0.150078, 1.39894));
+input_particles.push_back(fastjet::PseudoJet(-0.214337, 0.366163, -0.46438, 0.644317));
+input_particles.push_back(fastjet::PseudoJet(-0.180306, 0.213337, 0.301274, 0.4339));
+input_particles.push_back(fastjet::PseudoJet(-0.77701, 0.0622795, 0.623041, 1.00761));
+input_particles.push_back(fastjet::PseudoJet(-0.216197, -0.31984, 0.258486, 0.485112));
+input_particles.push_back(fastjet::PseudoJet(-0.0874667, -0.388522, -0.0342334, 0.423381));
+input_particles.push_back(fastjet::PseudoJet(0.905245, 0.0239595, -0.645332, 1.1207));
+input_particles.push_back(fastjet::PseudoJet(0.634549, 0.694109, -1.03553, 1.40579));
+input_particles.push_back(fastjet::PseudoJet(0.573026, 0.425851, 0.541355, 0.906782));
+input_particles.push_back(fastjet::PseudoJet(0.476921, 0.107116, 0.419262, 0.658929));
+input_particles.push_back(fastjet::PseudoJet(0.522971, 0.112166, 0.606353, 0.820502));
+input_particles.push_back(fastjet::PseudoJet(0.195637, 0.064606, -0.0895375, 0.26447));
+input_particles.push_back(fastjet::PseudoJet(0.525977, 0.796719, 1.02371, 1.40672));
+input_particles.push_back(fastjet::PseudoJet(-0.0780431, 0.276187, -0.262299, 0.413099));
+input_particles.push_back(fastjet::PseudoJet(-0.362776, -0.0433181, 0.0807808, 0.399359));
+input_particles.push_back(fastjet::PseudoJet(-1.19125, 0.0483562, 0.988077, 1.55473));
+input_particles.push_back(fastjet::PseudoJet(0.275336, 0.0391245, 0.293278, 0.427588));
+input_particles.push_back(fastjet::PseudoJet(0.6011, -0.0377628, -0.256513, 0.669347));
+input_particles.push_back(fastjet::PseudoJet(0.51302, -0.164207, 0.484372, 0.737732));
+input_particles.push_back(fastjet::PseudoJet(0.300589, 0.499874, -0.495866, 0.778197));
+input_particles.push_back(fastjet::PseudoJet(0.388959, 1.4686, -0.973407, 1.80972));
+input_particles.push_back(fastjet::PseudoJet(0.0259808, 0.66979, -0.642585, 0.938983));
+input_particles.push_back(fastjet::PseudoJet(-0.123036, 1.14799, 1.04716, 1.56494));
+input_particles.push_back(fastjet::PseudoJet(-0.81601, 0.836539, 0.817919, 1.43323));
+input_particles.push_back(fastjet::PseudoJet(-0.242228, 0.339009, 0.467465, 0.641565));
+input_particles.push_back(fastjet::PseudoJet(-0.695604, 0.444668, 0.454048, 0.952488));
+input_particles.push_back(fastjet::PseudoJet(-0.319907, -0.143517, 0.18038, 0.418275));
+input_particles.push_back(fastjet::PseudoJet(0.217548, -0.717788, -0.865423, 1.15368));
+input_particles.push_back(fastjet::PseudoJet(0.229812, -0.743027, 0.891667, 1.19141));
+input_particles.push_back(fastjet::PseudoJet(0.299732, -0.507567, 0.037048, 0.60689));
+input_particles.push_back(fastjet::PseudoJet(0.528818, -0.102359, 0.570912, 0.797212));
+input_particles.push_back(fastjet::PseudoJet(0.197584, 0.194331, 0.285318, 0.421533));
+input_particles.push_back(fastjet::PseudoJet(0.397903, 0.0178817, 0.455954, 0.621305));
+input_particles.push_back(fastjet::PseudoJet(0.0856007, 0.369056, 0.435781, 0.594067));
+input_particles.push_back(fastjet::PseudoJet(-0.0882241, 0.37827, 0.313258, 0.518153));
+input_particles.push_back(fastjet::PseudoJet(-0.771477, 0.416695, 0.917098, 1.27646));
+input_particles.push_back(fastjet::PseudoJet(-1.50416, -0.22517, 0.892858, 1.76915));
+input_particles.push_back(fastjet::PseudoJet(-1.20197, -0.165593, 1.17621, 1.69562));
+input_particles.push_back(fastjet::PseudoJet(-0.729644, 0.0503718, 0.823955, 1.11054));
+input_particles.push_back(fastjet::PseudoJet(-0.264108, 0.00738083, -0.163042, 0.340397));
+input_particles.push_back(fastjet::PseudoJet(-0.441089, -0.256657, -0.134486, 0.545892));
+input_particles.push_back(fastjet::PseudoJet(-0.512865, -0.776955, 0.91508, 1.31284));
+input_particles.push_back(fastjet::PseudoJet(0.435567, -0.389064, 0.0582648, 0.603295));
+input_particles.push_back(fastjet::PseudoJet(0.300571, 0.493742, 0.51591, 0.787253));
+input_particles.push_back(fastjet::PseudoJet(0.343379, 0.729439, 0.842393, 1.17435));
+input_particles.push_back(fastjet::PseudoJet(-0.280058, 0.975853, 0.0306282, 1.02525));
+input_particles.push_back(fastjet::PseudoJet(0.0977108, 0.230841, 0.200265, 0.349887));
+input_particles.push_back(fastjet::PseudoJet(-0.438668, 0.0280023, -0.0766766, 0.467518));
+input_particles.push_back(fastjet::PseudoJet(-0.424519, 0.146305, 0.368201, 0.597221));
+input_particles.push_back(fastjet::PseudoJet(-0.46559, -0.213577, -0.182805, 0.561504));
+input_particles.push_back(fastjet::PseudoJet(-0.693756, -0.578499, 0.893545, 1.27823));
+input_particles.push_back(fastjet::PseudoJet(-0.105443, -0.171303, -0.0906374, 0.26107));
+input_particles.push_back(fastjet::PseudoJet(0.604048, -0.0741217, -0.622027, 0.881343));
+input_particles.push_back(fastjet::PseudoJet(0.386247, -0.46928, -0.476231, 0.784656));
+input_particles.push_back(fastjet::PseudoJet(0.780346, -0.849113, 0.696001, 1.35419));
+input_particles.push_back(fastjet::PseudoJet(0.223755, 0.208787, -0.351819, 0.486739));
+input_particles.push_back(fastjet::PseudoJet(-0.171488, 0.113337, -0.0486314, 0.253177));
+input_particles.push_back(fastjet::PseudoJet(-0.0843746, 0.27068, 0.0717828, 0.324067));
+input_particles.push_back(fastjet::PseudoJet(-0.87259, -0.131422, 0.813156, 1.20805));
+input_particles.push_back(fastjet::PseudoJet(-0.64745, -0.548009, -0.30627, 0.912572));
+input_particles.push_back(fastjet::PseudoJet(0.68597, -1.17978, -0.981049, 1.68653));
+input_particles.push_back(fastjet::PseudoJet(0.898912, -0.439572, 0.69733, 1.22761));
+input_particles.push_back(fastjet::PseudoJet(0.376261, 0.836181, -0.306618, 0.976865));
+input_particles.push_back(fastjet::PseudoJet(0.110147, 0.205215, 0.00496135, 0.27157));
+input_particles.push_back(fastjet::PseudoJet(-0.526565, 0.957559, -1.27352, 1.6839));
+input_particles.push_back(fastjet::PseudoJet(-0.186156, 0.158303, -0.0945547, 0.296874));
+input_particles.push_back(fastjet::PseudoJet(-0.34411, 0.0528533, 0.28835, 0.473107));
+input_particles.push_back(fastjet::PseudoJet(-0.453042, 0.0245124, 0.394056, 0.616934));
+input_particles.push_back(fastjet::PseudoJet(-0.252045, -1.07902, 1.13841, 1.59477));
+input_particles.push_back(fastjet::PseudoJet(0.0659958, -0.3346, 0.149144, 0.397538));
+input_particles.push_back(fastjet::PseudoJet(0.628675, -0.271143, 0.060443, 0.701344));
+input_particles.push_back(fastjet::PseudoJet(0.530629, -0.175216, 0.154082, 0.596229));
+input_particles.push_back(fastjet::PseudoJet(0.237824, 0.0891886, -0.201222, 0.352824));
+input_particles.push_back(fastjet::PseudoJet(0.232395, 0.139096, -0.196126, 0.362354));
+input_particles.push_back(fastjet::PseudoJet(0.208926, 0.0145465, -0.0351926, 0.254126));
+input_particles.push_back(fastjet::PseudoJet(0.0611997, 0.300234, -0.0726689, 0.344451));
+input_particles.push_back(fastjet::PseudoJet(-0.0277485, 0.314659, -0.132956, 0.370051));
+input_particles.push_back(fastjet::PseudoJet(-0.509519, 0.568532, -0.10407, 0.783038));
+input_particles.push_back(fastjet::PseudoJet(-0.276911, -0.462551, 0.192226, 0.589122));
+input_particles.push_back(fastjet::PseudoJet(-0.42527, -0.774565, 1.01602, 1.35373));
+input_particles.push_back(fastjet::PseudoJet(0.107525, -0.550322, -0.0683219, 0.581862));
+input_particles.push_back(fastjet::PseudoJet(0.183166, -0.378004, 0.131652, 0.461789));
+input_particles.push_back(fastjet::PseudoJet(0.203981, -0.269376, 0.346616, 0.50378));
+input_particles.push_back(fastjet::PseudoJet(0.57333, 0.00850875, -0.665883, 0.889753));
+input_particles.push_back(fastjet::PseudoJet(0.254718, -0.123797, 0.330253, 0.456896));
+input_particles.push_back(fastjet::PseudoJet(0.995236, 0.551994, 0.896655, 1.45556));
+input_particles.push_back(fastjet::PseudoJet(0.925242, 0.958328, 0.696169, 1.5095));
+input_particles.push_back(fastjet::PseudoJet(0.374541, -0.252368, -0.42216, 0.633774));
+input_particles.push_back(fastjet::PseudoJet(0.126741, 1.01457, -1.16091, 1.55326));
+input_particles.push_back(fastjet::PseudoJet(-0.488703, 0.0832721, -0.100079, 0.524653));
+input_particles.push_back(fastjet::PseudoJet(-0.226924, 0.196277, -0.0279279, 0.332083));
+input_particles.push_back(fastjet::PseudoJet(-0.20334, -0.0235285, 0.22679, 0.335878));
+input_particles.push_back(fastjet::PseudoJet(-0.672686, -0.93887, 0.355237, 1.21641));
+input_particles.push_back(fastjet::PseudoJet(0.589757, -0.348626, 0.0330456, 0.699946));
+input_particles.push_back(fastjet::PseudoJet(0.580068, -0.014522, -0.0332927, 0.597728));
+input_particles.push_back(fastjet::PseudoJet(-0.331352, 0.148707, 0.0145266, 0.389357));
+input_particles.push_back(fastjet::PseudoJet(-0.610824, 0.0939972, 0.368477, 0.732937));
+input_particles.push_back(fastjet::PseudoJet(-0.612439, -0.989172, -0.824736, 1.4329));
+input_particles.push_back(fastjet::PseudoJet(-0.128853, -0.223495, 0.278022, 0.40414));
+input_particles.push_back(fastjet::PseudoJet(0.191821, 0.0616304, -0.231365, 0.337051));
+input_particles.push_back(fastjet::PseudoJet(0.334299, 0.513513, 0.641998, 0.898384));
+input_particles.push_back(fastjet::PseudoJet(-0.810339, -0.251121, -0.644832, 1.07471));
+input_particles.push_back(fastjet::PseudoJet(0.0388452, -0.221399, -0.262633, 0.372804));
+input_particles.push_back(fastjet::PseudoJet(0.349421, -0.172177, -0.408831, 0.581689));
+input_particles.push_back(fastjet::PseudoJet(0.799342, -0.0673264, 0.394888, 0.90493));
+input_particles.push_back(fastjet::PseudoJet(-0.151814, 0.352114, 0.37729, 0.555751));
+input_particles.push_back(fastjet::PseudoJet(-0.551723, -0.00146245, 0.604593, 0.830309));
+input_particles.push_back(fastjet::PseudoJet(-0.0544011, -0.488646, 0.438822, 0.673631));
+input_particles.push_back(fastjet::PseudoJet(0.265517, -0.449363, 0.0286776, 0.541044));
+input_particles.push_back(fastjet::PseudoJet(0.873668, -0.78677, 0.730421, 1.39115));
+input_particles.push_back(fastjet::PseudoJet(0.317664, -0.0794543, 0.373283, 0.515794));
+input_particles.push_back(fastjet::PseudoJet(0.746936, 0.932197, -1.24995, 1.73457));
+input_particles.push_back(fastjet::PseudoJet(-0.217734, 0.0889856, -0.0959498, 0.289849));
+input_particles.push_back(fastjet::PseudoJet(-1.19195, -0.593198, -0.037714, 1.33922));
+input_particles.push_back(fastjet::PseudoJet(-0.88169, 0.0349848, -0.897332, 1.26621));
+input_particles.push_back(fastjet::PseudoJet(-0.504093, 0.156762, -0.283135, 0.615085));
+input_particles.push_back(fastjet::PseudoJet(0.574266, -0.370867, 0.580929, 0.9079));
+input_particles.push_back(fastjet::PseudoJet(0.351872, 0.175674, 0.457861, 0.619509));
+input_particles.push_back(fastjet::PseudoJet(0.530685, 1.06246, -1.26575, 1.74127));
+input_particles.push_back(fastjet::PseudoJet(-0.346484, 0.43088, 0.620682, 0.842873));
+input_particles.push_back(fastjet::PseudoJet(-0.672678, -0.323062, -0.0295145, 0.759747));
+input_particles.push_back(fastjet::PseudoJet(-0.131754, -0.164283, 0.061498, 0.260019));
+input_particles.push_back(fastjet::PseudoJet(0.646473, -0.602147, 1.03438, 1.36745));
+input_particles.push_back(fastjet::PseudoJet(-0.395276, -0.319726, -0.580447, 0.784134));
+input_particles.push_back(fastjet::PseudoJet(-0.640556, -0.626101, 0.794063, 1.20513));
+//-----------Background-estimation--------------------------------------------------
+
+        //Definition of jets for background estimation
+        //Contrary to the inclusive jets, the background jets are reconstructed with the kt algorithm (recommended choice)
+        JetDefinition jet_def_bkgd(kt_algorithm, 0.4,E_scheme,Best);
+
+        //Definition of the area for background estimation626
+        AreaDefinition area_def_bkgd(active_area_explicit_ghosts,GhostedAreaSpec(1.2, 1, 0.005)); //TTEESSTT fGhostMaxrap 0.01
+
+        //Remove two hardest jets in central collisions, one in others
+        /*if (centrality == 7 || centrality == 8)*/ nJetsRemove = 2; //TTEESSTT
+
+        //Definition of the selector for background estimation (eta and pt cut + remove the n hardest jets)
+        Selector selector = SelectorAbsEtaMax(1. - 0.4) *(!SelectorNHardest(2)); //TTEESSTT SelectorAbsEtaMax(1.0) * SelectorPtMin(0.01)
+        //1-R???no 
+
+        //Definition of the background estimator
+        JetMedianBackgroundEstimator bkgd_estimator(selector, jet_def_bkgd, area_def_bkgd);
+
+        //Estimation of the background using only charged tracks
+        bkgd_estimator.set_particles(input_particles); //Bug previously: chargedjetTracks instead of input_particles
+
+        //Calculation of the rho (median) and sigma (fluctuations of the median) for the background
+        float rho = bkgd_estimator.rho();
+        cout << "rho: " << rho << endl;
+          cout << "input_particles.size() " << input_particles.size() << endl;
+                 cout << "bkgd_estimator.mean_area() " << bkgd_estimator.mean_area() << endl;
+        float emptyjets = bkgd_estimator.n_empty_jets();
+        float alljets = bkgd_estimator.n_jets_used();
+               cout << "bkgd_estimator.n_jets_used();" << bkgd_estimator.n_jets_used() << endl;
+               
+                      cout << "bkgd_estimator.description(): " << endl;
+       cout << bkgd_estimator.description() << endl;
+        //float rho_sigma = bkgd_estimator.sigma();
+            std::vector<fastjet::PseudoJet> rho_jets = bkgd_estimator.jets();
+    std::vector<fastjet::PseudoJet> rho_jets = full_selector(all_jets);
+
+            std::cout << std::setw(5) << "Jet" 
+              << std::setw(15) << "px" 
+              << std::setw(15) << "py" 
+              << std::setw(15) << "pz" 
+              << std::setw(15) << "E" 
+              << std::setw(15) << "pT" 
+              << std::setw(15) << "eta" 
+              << std::setw(15) << "phi" 
+              << std::setw(15) << "m" 
+              << std::endl;
+
+    std::cout << std::string(125, '-') << std::endl;
+
+    // Iterace přes všechny jety a jejich výpis
+    for (size_t i = 0; i < rho_jets.size(); ++i) {
+        const fastjet::PseudoJet& jet = rho_jets[i];
+        std::cout << std::setw(5) << i + 1
+                  << std::setw(15) << jet.px()
+                  << std::setw(15) << jet.py()
+                  << std::setw(15) << jet.pz()
+                  << std::setw(15) << jet.E()
+                  << std::setw(15) << jet.pt()
+                  << std::setw(15) << jet.eta()
+                  << std::setw(15) << jet.phi()
+                  << std::setw(15) << jet.m()
+                  << std::endl;
+    }
+        
+/*
+    for (size_t i = 0; i < input_particles.size(); ++i) {
+        // Získání hodnot z PseudoJet
+        double px = input_particles[i].px();
+        double py = input_particles[i].py();
+        double pz = input_particles[i].pz();
+        double E = input_particles[i].E();
+        double pt = input_particles[i].pt();
+        double eta = input_particles[i].eta();
+        double phi = input_particles[i].phi();
+        double m = input_particles[i].m();
+
+        // Výpis hodnot
+        cout << "Particle " << i << ": "
+             << "px = " << px << ", "
+             << "py = " << py << ", "
+             << "pz = " << pz << ", "
+             << "E = " << E << ", "
+             << "pt = " << pt << ", "
+             << "eta = " << eta << ", "
+             << "phi = " << phi << ", "
+             << "m = " << m << endl;
+    }*/
+
+//-----------Jet-reconstruction-and-variable-calculations----------------------------
+
+        //Inclusive (or track based) jet definition
+        fastjet::JetDefinition jet_def(fastjet::antikt_algorithm, R, E_scheme, Best); //TTEESSTT E_scheme, Best
+
+        //Definition of the area for jet reconstruction
+        AreaDefinition area_def(active_area_explicit_ghosts, GhostedAreaSpec(1.2, 1, 0.01)); //TTEESSTT fGhostMaxrap
+
+        //Definition of the clustering
+        ClusterSequenceArea clust_seq_hard(input_particles, jet_def, area_def);
+
+        //Jet minimum pT cut
+        double ptmin = 0.0;
+
+        //Sorting of the jets by pT
+        vector<fastjet::PseudoJet> inclusive_jets = sorted_by_pt(clust_seq_hard.inclusive_jets(ptmin));
+
+        //Print the results
+        /*
+        cout << "Ran " << jet_def.description() << endl;
+        printf("%5s %15s %15s %15s %15s\n","jet #", "rapidity", "phi", "pt", "index");
+        */
+
+        //Loop over all jets
+        for (unsigned int i = 0; i < inclusive_jets.size(); i++) {
+
+            //Exclude jets with |eta| > 1 - R
+            ////if (abs(inclusive_jets[i].pseudorapidity()) > (1.0 - R)) continue; Postponed to local analysis
+
+	    //Constituent counter
+	    int ConstCounter = 0;
+
+            //Initialize the variables (angularities, z-value)
+            int user_index = 0;
+            double Delta_R_D0 = 0;
+            double lambda_alpha_0 = 0.;
+            double lambda_alpha_0half = 0.5;
+            double lambda_alpha_1 = 1.;
+            double lambda_alpha_1half = 1.5;
+            double lambda_alpha_2 = 2.;
+            double lambda_alpha_3 = 3.;
+            double lambda_kappa_1 = 1.;
+            double lambda_kappa_2 = 2.;
+            double zet = 0;
+            double lambda_1_0half = 0;
+            double lambda_1_1 = 0;
+            double lambda_1_1half = 0;
+            double lambda_1_2 = 0;
+            double lambda_1_3 = 0;
+            double lambda_2_0 = 0;
+            double neutralpT = 0;
+
+            //Calculate the jet pT + background subtraction (= _corr)
+            //pT(sub) = pT - rho * A_jet
+            //Since z-value requires px and py, it is calculated as well
+            double pT_jet = inclusive_jets[i].perp();
+            double pT_jet_corr = pT_jet - rho * inclusive_jets[i].area();
+            double px_jet = inclusive_jets[i].px();
+            double px_jet_corr = px_jet - rho * inclusive_jets[i].area_4vector().px();
+            double py_jet = inclusive_jets[i].py();
+            double py_jet_corr = py_jet - rho * inclusive_jets[i].area_4vector().py();
+
+            //Loading the constituents of the jet
+            const vector<fastjet::PseudoJet>& constituents = inclusive_jets[i].constituents();
+
+            //Loop over all constituents of the i-th jet
+            for (vector<fastjet::PseudoJet>::const_iterator particle = constituents.begin(); particle != constituents.end(); ++particle) {
+
+                //Loading of the particle index
+                int index = particle->user_index();
+                
+                //Number of constituents (+-2 = D0, 3 = charged, 10 = neutral, -1 ghost)
+                if (index == -1) continue;
+                
+                //Constituent counter
+                ConstCounter++;
+                
+                //Fraction of neutral particles
+                if (index == 10) neutralpT += particle->pt();
+                
+                //Calculating the delta R = sqrt(delta eta^2 + delta phi^2)
+                double Delta_R =delta_R(inclusive_jets[i].eta(),inclusive_jets[i].phi(),particle->eta(),particle->phi());
+
+                //Angularities are calculated only for track based particles (charged + D0)
+                if (particle->user_index() != 10) {
+                    lambda_1_0half+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_0half);
+                    lambda_1_1+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_1);
+                    lambda_1_1half+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_1half);
+                    lambda_1_2+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_2);
+                    lambda_1_3+=pow(particle->pt()/pT_jet_corr,lambda_kappa_1)*pow( Delta_R /jet_def.R() ,lambda_alpha_3);
+ 		            lambda_2_0+=pow(particle->pt()/pT_jet_corr,lambda_kappa_2)*pow( Delta_R /jet_def.R() ,lambda_alpha_0);
+                }
+
+                //Check if the constituent is D0 (D0 = 2, antiD0 = -2)
+                if (abs(index) == 2 ) {
+		    
+		    //cout << "Number of empty jets: "<< emptyjets << " / " << alljets << endl;
+
+                    //user_index is used as a flag to check if the jet contains D0
+                    user_index = index;
+
+                    //Delta R for D0
+                    Delta_R_D0 = Delta_R;
+
+                    //z-value, z = pT(D0)*^pT(jet)/|pT(jet)|
+                    zet = (D0_fourmomentum[nD0].px*px_jet_corr+D0_fourmomentum[nD0].py*py_jet_corr)/(pT_jet_corr*pT_jet_corr);
+                }
+
+            } //End of loop over all constituents of the i-th jet
+
+            //Calculation of the fraction of neutral particles
+            double nfraction = neutralpT/pT_jet;
+
+            //If the fraction is too high, jet is rejected (Parameter is saved in RunPicoD0AnaMaker.C as setMaxNeutralFraction)
+            ////if (nfraction > maxneutralfrac) continue; //Postponed to local analysis
+            
+            //if (area_jet < fAcuts) continue; //Not implemented
+
+            //If the jet contains D0
+            if (abs(user_index) ==2){
+
+                //Calculation of the D0 mass
+                double D0mass = D0_fourmomentum[nD0].D0Mass;
+                //Calculation of the D0 pT (pT=sqrt(px^2+py^2))
+                double D0_pT = sqrt(D0_fourmomentum[nD0].px*D0_fourmomentum[nD0].px+D0_fourmomentum[nD0].py*D0_fourmomentum[nD0].py);
+
+		//Fill the histogram (pt vs background density)
+                Jet_grefmult_pt_background->Fill(picoDst->event()->grefMult(),rho);
+                //Rapidity calculations and filling histogram
+                double D0_rapidity = 1./2.*log((D0_fourmomentum[nD0].E+D0_fourmomentum[nD0].pz)/(D0_fourmomentum[nD0].E-D0_fourmomentum[nD0].pz));
+  		
+  		TLorentzVector v(D0_fourmomentum[nD0].px,D0_fourmomentum[nD0].py,D0_fourmomentum[nD0].pz,D0_fourmomentum[nD0].E);
+  		//cout << " a " << v.Rapidity() << endl;
+  		//cout << D0_rapidity << endl;
+  		//cout << "pseudorapidity: " << v.PseudoRapidity() << endl;
+  		
+                Jet_D0pT_vs_D0rapidity->Fill(D0_rapidity,D0_pT);
+                Jet_D0pT_vs_Jetrapidity->Fill(inclusive_jets[i].rapidity(),D0_pT);
+                Jet_phi->Fill(inclusive_jets[i].phi());
+
+                //Fill the TNtuple
+		TupleVariables[VariableJets["RunId"]] = RunId * user_index / 2.;             		// EventID, positive for D0, negative for antiD0
+		TupleVariables[VariableJets["centrality"]] = centrality;                    		// Centrality
+		TupleVariables[VariableJets["centr_weight"]] = reweight;                    		// Centrality reweighting factor
+		TupleVariables[VariableJets["NJet"]] = D0_fourmomentum.size();              		// Number of D0 in the event
+		TupleVariables[VariableJets["pseudorapidity"]] = inclusive_jets[i].pseudorapidity(); 	// Jet eta  
+		TupleVariables[VariableJets["jet_phi"]] = inclusive_jets[i].phi();         		// Jet phi
+		TupleVariables[VariableJets["grefmult"]] = picoDst->event()->grefMult();    		// grefMult
+		TupleVariables[VariableJets["bg_dens"]] = rho;                               		// density of the background
+		TupleVariables[VariableJets["jet_area"]] = inclusive_jets[i].area();         		// area of the jet
+		TupleVariables[VariableJets["jet_rap"]] = inclusive_jets[i].rap();           		// rapidity of the jet
+		TupleVariables[VariableJets["jet_pt"]] = pT_jet;                             		// Jet pT
+		TupleVariables[VariableJets["jet_pt_corr"]] = pT_jet_corr;                   		// Jet pT after background subtraction
+		TupleVariables[VariableJets["D0mass"]] = D0mass;                             		// D0 mass
+		TupleVariables[VariableJets["D0_r"]] = Delta_R_D0;                           		// Delta R between D0 and jet axis
+		TupleVariables[VariableJets["D0_pT"]] = D0_pT;                               		// D0 pT
+		TupleVariables[VariableJets["lambda_1_0half"]] = lambda_1_0half;             		// Angularity lambda_1_0.5
+		TupleVariables[VariableJets["lambda_1_1"]] = lambda_1_1;                     		// Angularity lambda_1_1
+		TupleVariables[VariableJets["lambda_1_1half"]] = lambda_1_1half;             		// Angularity lambda_1_1.5
+		TupleVariables[VariableJets["lambda_1_2"]] = lambda_1_2;                     		// Angularity lambda_1_2
+		TupleVariables[VariableJets["lambda_1_3"]] = lambda_1_3;                     		// Angularity lambda_1_3
+		TupleVariables[VariableJets["lambda_2_0"]] = lambda_2_0;                     		// Angularity lambda_2_0
+		TupleVariables[VariableJets["z"]] = zet;                                     		// zet
+		TupleVariables[VariableJets["NConst"]] = ConstCounter; 					// Number of constituents
+		TupleVariables[VariableJets["NpTfraction"]] = nfraction;                     		// Neutral pT fraction
+		TupleVariables[VariableJets["D0_rap"]] = D0_rapidity;                     		// D0 meson rapidity
+		
+                //Fill the array to TNtuple                
+                Jets->Fill(TupleVariables);
+
+		//cout << "eventID: " << picoDst->event()->eventId() << endl;
+
+                //Print colorfully the D0-jet information
+                printf("\033[32m%5u %15.8f %15.8f %15.8f %15d\033[0m\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);
+cout << D0mass << " " << D0_pT << " ptjet: " << pT_jet << " ptjetcorr: " << pT_jet_corr << " " << inclusive_jets[i].area() << " " << rho << endl;
+            } else{
+
+                //Print the jet information
+                /*printf("%5u %15.8f %15.8f %15.8f %15d\n", i, inclusive_jets[i].rap(), inclusive_jets[i].phi(), inclusive_jets[i].perp(), user_index);*/
+
+            } //End of if the jet contains D0
+
+        } //End of loop over all jets
+
+        //Delete vectors to avoid a pileup
+        inclusive_jets.clear();
+        input_particles.clear();
+        chargedjetTracks.clear();
+        neutraljetTracks.clear();
+
+      } //End of D0 loop
+
+  } //End of IsthereD0 condition
+
+  //Delete daughter particles vectors
+  DaughterPionTrackVector.clear();
+  DaughterKaonTrackVector.clear();
+
+  //End of the event
+  return kStOK;
+}
+
+//---------------------------------------------------------------------
+//-----------------------------FUNCTIONS-------------------------------
+//---------------------------------------------------------------------
+ //Not used anymore
+Double_t StPicoD0AnaMaker::vertexCorrectedEta(double eta, double vz) {
+    //Function to correct the eta value of a track for the z-position of the primary vertex
+
+    //eta = -log(tan(theta/2)) => theta = 2*atan(exp(-eta))
+    double tower_theta = 2.0 * atan(exp(-eta));
+
+    //If eta = 0 then z = 0
+    //Else calculate z position
+    double z = 0.0;
+    if (eta != 0.0) z = mBarrelRadius / tan(tower_theta);
+
+    //Difference between the z position of the track and the z position of the primary vertex
+    double z_diff = z - vz;
+
+    //Calculate the corrected theta value
+    double theta_corr = atan2(mBarrelRadius, z_diff);
+
+    //Calculate the corrected eta value
+    double eta_corr = -log(tan(theta_corr / 2.0));
+
+    return eta_corr;
+
+    //Function returns the corrected eta value
+}
+//---------------------------------------------------------------------------
+Bool_t StPicoD0AnaMaker::GetCaloTrackMomentum(StPicoDst *mPicoDst, TVector3 mPrimVtx) {
+  //Function to calculate the momentum of the track matched to the calorimeter tower
+
+  //Loading of the number of tracks in the event
+  UInt_t nTracks = mPicoDst->numberOfTracks();
+
+  //Loop over all tracks in the event
+  for (unsigned int itrack = 0; itrack < nTracks; itrack++) {
+
+      //Loading the track
+      StPicoTrack *trk = mPicoDst->track(itrack);
+      //Loading of the global momentum
+      TVector3 gMom = trk->gMom();
+
+      //Loading of the pT
+      double pT = gMom.Perp();
+      //Check if the pT is above 0.2 GeV/c or if it is NaN, because NaN!=NaN
+      if(pT != pT || pT < 0.2) continue;
+      //Loading of eta
+      float eta = gMom.PseudoRapidity();
+      //Exclude tracks outside of the TPC acceptance
+      if (fabs(eta) > 1) continue;
+      //Loading of phi
+      //float phi = gMom.Phi();
+
+      //Loading of the number of hits
+      float nHitsFit = trk->nHitsFit();
+      //Loading of the number of hits possible
+      float nHitsMax = trk->nHitsMax();
+      //Exclude tracks with less than 15 hits or with a ratio of less than 0.52
+      if (nHitsFit < 15 || nHitsFit/nHitsMax < 0.52) continue;
+
+      //Loading of the value of the magnetic field
+      double Bfield = mPicoDst->event()->bField();
+      //Loading of the helix
+      StPicoPhysicalHelix trkhelix = trk->helix(Bfield);
+
+      //Loading of the primary vertex
+      float vtx_x = mPrimVtx.x();
+      float vtx_y = mPrimVtx.y();
+      float vtx_z = mPrimVtx.z();
+
+      //Calculation of the DCA to the primary vertex
+      TVector3 dcaPoint = trkhelix.at(trkhelix.pathLength(vtx_x, vtx_y));
+      //Calculation of the DCA in the x-y plane
+      float dca_z = dcaPoint.z() - vtx_z;
+      //Exclude tracks with a DCA to the primary vertex in z of more than maxdcazhadroncorr (in RunPicoD0AnaMaker.C)
+      if (fabs(dca_z) > maxdcazhadroncorr) continue;
+
+      //Initialization and loading of the tower index
+      int TowIndex = -99999;
+      TowIndex = trk->bemcTowerIndex();
+
+      //Initialization of the momentum
+      float p = 0;
+
+      //Check if the track is matched to a tower
+      if (TowIndex > 0) {
+
+        //Loading of the momentum
+        p = gMom.Mag();
+        
+        //Energy calculation
+	double pimass_corr = 0.13957018;
+	double TrackEnergy = 1.0*TMath::Sqrt(p*p + M_PION_PLUS*M_PION_PLUS);
+        
+        //Summing up the momentum of all tracks matched to the same tower //Previously neglected pion mass 
+        //Sump[TowIndex-1] += TrackEnergy;
+        //Sump[TowIndex-1] += sqrt(TrackEnergy*TrackEnergy-M_PION_PLUS*M_PION_PLUS); //TTEESSTT
+        Sump[TowIndex-1] += sqrt(TrackEnergy*TrackEnergy-0.13957*0.13957);
+      }
+  
+  } //End of track loop
+
+  return true;
+
+  //Function returns true if it was successful and Sump filled with the momentum of all tracks matched to a tower
+}
+//---------------------------------------------------------------------------
+Double_t StPicoD0AnaMaker::GetTowerCalibEnergy(Int_t TowerId){
+  //Function calculates the calibrated energy of a tower
+
+  //Loading of the tower
+  StPicoBTowHit *tower = static_cast<StPicoBTowHit*>(picoDst->btowHit(TowerId-1));
+
+  //Initialization of the pedestal, rms and status
+  Float_t pedestal, rms;
+  Int_t status;
+
+  //Loading of the pedestal, rms and status (it does not work, if you use root instead of root4star)
+  mTables->getPedestal(BTOW, TowerId, 0, pedestal, rms);
+  mTables->getStatus(BTOW, TowerId, status);
+
+  //Initialization of the tower coefficients
+  Double_t *TowerCoeff;
+
+  //Tower coefficients for the different runs, parameters are saved in BemcNewCalib.h
+  if(picoDst->event()->runId() <= 15094020) TowerCoeff = CPre;
+  else TowerCoeff = CLowMidHigh;
+
+  //Calculation of the calibrated energy E=C*(ADC-Pedestal)
+  Double_t calibEnergy = TowerCoeff[TowerId-1]*(tower->adc() - pedestal);
+
+  return calibEnergy;
+
+  //Function returns the calibrated energy of the tower
+}
+//---------------------------------------------------------------------------
+bool StPicoD0AnaMaker::IsBadEnergyRun(int runID) {
+    // Check if the run is in the list of BEMC bad runs
+
+    for (unsigned int i = 0; i < sizeof(EnergyBadRunList)/sizeof(EnergyBadRunList[0]); i++) {
+        if (EnergyBadRunList[i] == runID) {
+            return true;
+        }
+    }
+    return false;
+
+    //Function returns true if the run is in the list of bad runs
+}
+//---------------------------------------------------------------------------
+int StPicoD0AnaMaker::isD0PairCentrality_pt(StKaonPion const* const kp, int Centrality, int mYear) const{
+    //Check if the pair passes the cuts for D0
+
+    //Loading the daughter particles tracks
+    StPicoTrack const* kaon = picoDst->track(kp->kaonIdx());
+    StPicoTrack const* pion = picoDst->track(kp->pionIdx());
+
+    //Initialisation of the pairCuts boolean
+    bool pairCuts = false;
+
+    //Recalculation of the centrality binning
+    int Centrality2 =  (Centrality == 8 || Centrality == 7) ? 0 :
+                       (Centrality == 6) ? 1 :
+                       (Centrality == 5 || Centrality == 4) ? 2 :
+                       (Centrality == 3 || Centrality == 2) ? 3 :
+                       (Centrality == 1 || Centrality == 0) ? 4 : -1;
+    // Centr.   0-10%       10-20%         20-40%         40-60%        60-80%
+    // C_ID     8,7        6               5,4             3,2         1,0
+    // bin       0         1                 2               3           4
+
+
+    //Recalculation of the momentum binning
+    int KPMom = (kp->pt() < 0.5) ? 0 : (kp->pt() < 1) ? 1 : (kp->pt() < 2) ? 2 : (kp->pt() < 3) ? 3 : (kp->pt() < 5) ? 4 : 5;
+
+    //Check if the pair passes the particular cuts
+    //Parameters are saved in StCuts.cxx
+    if (mYear == 2014){
+        pairCuts =  sin(kp->pointingAngle())*kp->decayLength() < mycuts::DCA_D0_cut_2014[KPMom][Centrality2] &&
+                    kp->pionDca() > mycuts::pionDCA_cut_2014[KPMom][Centrality2] && kp->kaonDca() > mycuts::kaonDCA_cut_2014[KPMom][Centrality2] &&
+                    kp->dcaDaughters() < mycuts::pionkaonDCA_cut_2014[KPMom][Centrality2] && kp->decayLength()> mycuts::D0_decayLength_cut_2014[KPMom][Centrality2] &&
+                    cos(kp->pointingAngle()) > mycuts::cosTheta_2014;
+    } else if (mYear == 2016){
+        pairCuts =  sin(kp->pointingAngle())*kp->decayLength() < mycuts::DCA_D0_cut_2016[KPMom][Centrality2] &&
+                    kp->pionDca() > mycuts::pionDCA_cut_2016[KPMom][Centrality2] && kp->kaonDca() > mycuts::kaonDCA_cut_2016[KPMom][Centrality2] &&
+                    kp->dcaDaughters() < mycuts::pionkaonDCA_cut_2016[KPMom][Centrality2] && kp->decayLength()> mycuts::D0_decayLength_cut_2016[KPMom][Centrality2] &&
+                    cos(kp->pointingAngle()) > mycuts::cosTheta_2016;
+    }
+
+    //Calculation of the product of the daughter charges
+    int charge = kaon->charge() * pion->charge();
+
+    //If the daughter charges are the same, it changes charge to 1 (K+) or 2 (K-)
+    if(charge>0) charge = kaon->charge()>0 ? 1:2;
+
+    //If the pair passes the cuts, it returns the charge, else 0.
+    if(pairCuts) return charge;
+    else return 0;
+
+    //Function returns:
+    //0  - the pair does not pass the cuts
+    //-1 - the unlike-sign pair passes the cuts
+    //1  - the like-sign pair passes the cuts (pi+K+)
+    //2  - the like-sign pair passes the cuts (pi-K-)
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isGoodEvent(int mYear,  TH1F* NEventsCuts){
+  //Check if the event passes the cuts (MB triggers, vr, vz, vzVpdVz)
+
+  //Loading event
+  StPicoEvent *event = (StPicoEvent *)picoDst->event();
+
+  //Checking triggers
+  if (!isMBTrigger(mYear)) return false;
+  //NEventsCuts: Triggers
+  NEventsCuts->Fill(1);
+  //Checking vr = sqrt(vx^2+vy^2)
+  if (!(sqrt(event->primaryVertex().x()*event->primaryVertex().x()+event->primaryVertex().y()*event->primaryVertex().y()) < mycuts::vr)) return false;
+  //NEventsCuts: v_r
+  NEventsCuts->Fill(2);
+  //Checking vz
+  if (!(fabs(event->primaryVertex().z()) < mycuts::vz)) return false;
+  //NEventsCuts: v_z
+  NEventsCuts->Fill(3);
+  //Checking vzVpdVz
+  if (!(fabs(event->primaryVertex().z() - event->vzVpd()) < mycuts::vzVpdVz)) return false;
+  //NEventsCuts: |v_z - v_z_vpd|
+  NEventsCuts->Fill(4);
+  
+  //Check on suspicious all-0 position
+  bool nonezeroVertex = (event->primaryVertex().x()!=0 && event->primaryVertex().y()!=0 && event->primaryVertex().z()!=0);
+  if (!nonezeroVertex) return false;
+  NEventsCuts->Fill(5);
+
+  return true;
+
+  //Function returns true if the event passes the cuts
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isMBTrigger(int mYear){
+ //Function checks if the event is triggered by the MB trigger
+
+ //Initialization of the set of triggers
+ const std::set<int>* mbTriggers = nullptr;
+
+ //Different triggers for different years, saved in StCuts.cxx
+ if(mYear ==2016) mbTriggers = &mycuts::mbTriggers2016;
+ if(mYear ==2014) mbTriggers = &mycuts::mbTriggers2014;
+
+ //Loading event and checking if it is triggered by the MB trigger
+ StPicoEvent* event = static_cast<StPicoEvent*>(mPicoDstMaker->picoDst()->event());
+ return std::any_of(mbTriggers->begin(), mbTriggers->end(), [&](int trigger) { return event->isTrigger(trigger); });
+
+ //Function returns true if the event is triggered by the MB trigger
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isGoodTrack(StPicoTrack const * const trk) const{
+    // Require at least one hit on every layer of PXL and IST.
+    // It is done here for tests on the preview II data.
+    // The new StPicoTrack which is used in official production has a method to check this
+
+    //Check if the track meets the HFT requirement
+    //2014 - Require at least one hit on every layer of PXL and IST
+    //2016 - Require at least one hit on every layer of PXL and (IST or SST)
+    //Both can be written in te same way
+    bool HFTCondition = (trk->hasPxl1Hit() && trk->hasPxl2Hit()) && (trk->hasSstHit() || trk->hasIstHit());
+   // cout << "HFTCondition: " << HFTCondition << endl;
+    //Check if |eta| < 1
+    bool EtaCondition = abs(trk->gMom().PseudoRapidity()) < 1;
+     //  cout << "EtaCondition: " << EtaCondition << endl;
+
+	//cout << "trk->gPt() > mycuts::minPt: " << trk->gPt() << endl;
+	
+//cout << "trk->nHitsFit() >= mycuts::nHitsFit " << trk->nHitsFit() << endl;
+
+    //In StCuts.cxx is defined if the HFT is required and the nHitsFit and minPt values.
+    return (trk->gPt() > mycuts::minPt && trk->nHitsFit() >= mycuts::nHitsFit && (HFTCondition || !mycuts::requireHFT) && EtaCondition);
+
+
+
+    //Function returns true if track is good
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isGoodJetTrack(StPicoTrack const * const trk,StPicoEvent const *const myEvent) const{
+    //Check if the track meets the jet track cuts
+    //Parameters saved in StCuts.cxx
+
+    //pT range cut
+    bool pTTrackJetCut = trk->gPt() > mycuts::jetTrackPtMin && trk->gPt() < mycuts::jetTrackPtMax;
+    //eta range cut
+    bool etaTrackJetCut = fabs(trk->gMom().PseudoRapidity()) < mycuts::jetTrackEta;
+    //nHitsFit cut
+    bool nHitsTrackJetCut = trk->nHitsFit() >= mycuts::jetTracknHitsFit;
+    //nHitsRatio cut
+    bool nHitsRatioTrackJetCut = (1.0*trk->nHitsFit()/trk->nHitsMax())>=mycuts::jetTracknHitsRatio;
+    //DCA cut
+    bool dcaTrackJetCut = fabs(trk->gDCA(myEvent->primaryVertex().x(),myEvent->primaryVertex().y(),myEvent->primaryVertex().z())) < mycuts::jetTrackDCA;
+
+    return pTTrackJetCut && etaTrackJetCut && nHitsTrackJetCut && nHitsRatioTrackJetCut && dcaTrackJetCut;
+
+    //Return true if all the cuts are passed
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isTpcPion(StPicoTrack const * const trk) const{
+    //Check if the track meets nsigma (TPC) requirement for pion
+    //Parameters are saved in StCuts.cxx
+
+    return fabs(trk->nSigmaPion()) < mycuts::nSigmaPion;
+
+    //Function returns true if track is good
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isTpcKaon(StPicoTrack const * const trk) const{
+    //Check if the track meets nsigma (TPC) requirement for kaon
+    //Parameters are saved in StCuts.cxx
+
+    return fabs(trk->nSigmaKaon()) < mycuts::nSigmaKaon; //In D0 event maker it is set to 2
+
+    //Function returns true if track is good
+}
+//-----------------------------------------------------------------------------
+float StPicoD0AnaMaker::getTofBeta(StPicoTrack const * const trk, StThreeVectorF const* const pVtx,StPicoDst const* const picoDst) const{
+    //Calculation of beta for the track
+
+    //index2tof is index of the track in the StPicoBTofPidTraits array
+    int index2tof = trk->bTofPidTraitsIndex();
+
+    //Initialization of beta
+    float beta = std::numeric_limits<float>::quiet_NaN();
+
+    //If index2tof is positive, than the track has a match in the TOF
+    if(index2tof >= 0){
+
+        //Getting the pointer to the StPicoBTofPidTraits object
+        StPicoBTofPidTraits *tofPid = mPicoDstMaker->picoDst()->btofPidTraits(index2tof);
+
+        //If pointer is not null, than we can calculate beta
+        if(tofPid){
+
+            //Calculation of beta
+            beta = tofPid->btofBeta();
+
+            //If for some reason beta is negative, than we can try to calculate beta using the pathlength and tof
+            if (beta < 1e-4){
+
+                //Getting the hit position in the TOF
+                StThreeVectorF const btofHitPos = StThreeVectorF(tofPid->btofHitPos().x(),tofPid->btofHitPos().y(),tofPid->btofHitPos().z());
+
+                //Getting the helix of the track
+                StPicoPhysicalHelix helix = trk->helix(picoDst->event()->bField());
+
+                //Calculation of the pathlength
+                float L = tofPathLength(pVtx, &btofHitPos, helix.curvature());
+
+                //Calculation of the time of flight
+                float tof = tofPid->btof();
+
+                //Calculation of beta for positive values of tof
+                if (tof > 0) beta = L / (tof * (C_C_LIGHT / 1.e9));
+                //...else beta is not defined
+                else beta = std::numeric_limits<float>::quiet_NaN();
+
+            } //End of beta < 1e-4
+
+        } //End of tofPid != NULL
+
+    } //End of index2tof >= 0
+
+    return beta;
+
+    //Function returns beta of the track
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isTofKaon(StPicoTrack const * const trk, float beta) const{
+    //Check if the track meets |1/beta-1/beta_K| (TOF) requirement for kaon
+
+    //Initialization of tofKaon
+    bool tofKaon = false;
+
+    //If beta is positive, than we can calculate |1/beta-1/beta_K|
+    if(beta>0){
+
+        //Calculation of the global total momentum
+        double ptot = trk->gMom().Mag();
+
+        //Calculation of the expected beta for kaons
+        float beta_k = ptot/sqrt(ptot*ptot+M_KAON_PLUS*M_KAON_PLUS);
+
+        //Check if the track meets the TOF requirement
+        //Parameters are saved in StCuts.cxx
+        tofKaon = fabs(1/beta - 1/beta_k) < mycuts::kTofBetaDiff ? true : false;
+
+    } //End of beta > 0
+
+    return tofKaon;
+
+    //Function returns true if track is good based on TOF information
+}
+//-----------------------------------------------------------------------------
+bool StPicoD0AnaMaker::isTofPion(StPicoTrack const * const trk, float beta) const{
+    //Check if the track meets |1/beta-1/beta_pi| (TOF) requirement for pion
+
+    //Initialization of tofPion
+    bool tofPion = false;
+    
+    //cout << "___beta: " << beta << endl;
+
+    //If beta is positive, than we can calculate |1/beta-1/beta_K|
+    if(beta>0){
+
+        //Calculation of the global total momentum
+        double ptot = trk->gMom().Mag();
+	//cout << "___ptot: " << ptot <<endl;
+        //Calculation of the expected beta for kaons
+        float beta_pi = ptot/sqrt(ptot*ptot+M_PION_PLUS*M_PION_PLUS);
+	//cout << "___beta_pi: " << beta_pi <<endl;
+        //Check if the track meets the TOF requirement
+        //Parameters are saved in StCuts.cxx
+        tofPion = fabs(1/beta - 1/beta_pi) < mycuts::pTofBetaDiff ? true : false;
+	//cout << "___tofPion: " << tofPion <<endl;
+    } //End of beta > 0
+
+    return tofPion;
+
+    //Function returns true if track is good based on TOF information
+}
+
+
+
+
+
+
+

@@ -57,7 +57,7 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
       exit(0);
    }
 
-   Int_t nEvents = 100000;
+   Int_t nEvents = 100000000;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);
@@ -88,6 +88,9 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
 
 	if(!Testing){
       nEvents = picoDstMaker->chain()->GetEntries();
+   } else
+   {
+   if (nEvents>picoDstMaker->chain()->GetEntries()) nEvents = picoDstMaker->chain()->GetEntries();
    }
 
    cout << " Total entries = " << nEvents << endl;

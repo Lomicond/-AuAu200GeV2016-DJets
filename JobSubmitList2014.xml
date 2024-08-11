@@ -1,0 +1,60 @@
+<job minFilesPerProcess="20" maxFilesPerProcess="30" simulateSubmission="false" fileListSyntax="xrootd" >
+	
+ <!--<stdout discard="true" 
+ Badly placed ()'s.
+get_file_list.pl -keys path,filename -delim '/' -cond production=P16id,trgsetupname=AuAu_200_production_low_2014'||'AuAu_200_production_mid_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,runnumber[]15107005-15167014,storage!=hpss -limit 1 -distinct
+ 
+ 
+ />-->
+<!--
+<input URL="catalog:star.bnl.gov?production=P16id,trgsetupname=AuAu_200_production_mid_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,runnumber[]15107005-15167014,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="all" /> -->
+
+<input URL="filelist:/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/Run2014LowMid_sample.list" nFiles="all" />
+        <stdout URL="file:./out/$JOBID.out" />
+        <stderr URL="file:./err/$JOBID.err" />
+                
+        <Generator>
+        <Location>./report/</Location>
+        <ScriptLocation>./csh/</ScriptLocation>
+        <ListLocation>./list/</ListLocation>
+        </Generator>
+                                                
+<command>
+starver SL22c
+<!--root4star -b -l -q StRoot/macros/loadSharedHFLibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
+root4star -b -l -q RunPicoD0EventMaker.C\(\"$FILELIST\",\"Output_2014_${JOBINDEX}.root\",2014,false\) &gt;&amp; First_2014_${JOBINDEX}.log
+echo ${SCRATCH}/Output_2014_${JOBINDEX}.root.picoD0.root > TMPinput_2014_${JOBINDEX}.list
+root4star -b -l -q RunPicoD0AnaMaker.C\(\"TMPinput_2014_${JOBINDEX}.list\",\"$FILELIST\",\"D0_Output_2014_mid_${JOBINDEX}.root\",2014,false\) &gt;&amp; Second_2014_mid_${JOBINDEX}.log
+
+<!--\"$FILELIST\" -->
+<!--tar -zcvf ${JOBID}.log.tgz ${JOBID}.log -->
+</command>
+
+	<ResourceUsage>
+		<Memory>
+			<MinMemory>4000</MinMemory>
+			<!-- <MaxMemory>2000</MaxMemory> -->
+		</Memory>
+	</ResourceUsage>
+
+  <!--<input URL="filelist:./&listOfFiles;" />-->
+  <output fromScratch="D0*.root" toURL="/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/production/" />
+  <output fromScratch="*.log" toURL="/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/log/" />
+
+<SandBox installer="ZIP">
+	<Package name="LocalLibraries">
+		<File>file:./StRoot/</File>
+    <File>file:./StRoot/macros/RunPicoD0EventMaker.C</File>
+    <File>file:./StRoot/macros/RunPicoD0AnaMaker.C</File>
+    <File>file:./StRoot/macros/loadSharedAnalysisLibraries.C</File>
+    <File>file:./StRoot/macros/loadSharedLibraries.C</File>
+    <File>file:./StRoot/macros/loadSharedAnalysisLibraries_EM.C</File>
+        <File>file:./run14AuAu200GeVPrescales/</File>
+    <File>file:./picoList_bad_MB.list</File>
+     <File>file:./fastjet/</File>
+      <File>file:./siscone/</File>
+		<File>file:./.sl73_gcc485/</File>
+	</Package>
+</SandBox>
+
+</job>

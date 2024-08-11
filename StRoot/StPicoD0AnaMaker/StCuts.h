@@ -31,7 +31,8 @@ namespace mycuts
 
    //pions
    extern float const nSigmaPion;
-
+   extern float const pTofBetaDiff;
+   
    //kaons
    extern float const nSigmaKaon;
    extern float const kTofBetaDiff;
@@ -82,5 +83,7 @@ namespace mycuts
 
    extern const std::set<int> mbTriggers2014;
    extern const std::set<int> mbTriggers2016;
+   
+   extern const std::set<int> goodRun2014;
 }
 #endif

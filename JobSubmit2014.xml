@@ -1,8 +1,15 @@
-<job minFilesPerProcess="20" maxFilesPerProcess="40" simulateSubmission="false" fileListSyntax="xrootd" >
+<job minFilesPerProcess="20" maxFilesPerProcess="30" simulateSubmission="false" fileListSyntax="xrootd" >
 	
- <!--<stdout discard="true" />-->
+ <!--<stdout discard="true" 
+ Badly placed ()'s.
+get_file_list.pl -keys path,filename -delim '/' -cond production=P16id,trgsetupname=AuAu_200_production_low_2014'||'AuAu_200_production_mid_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,runnumber[]15107005-15167014,storage!=hpss -limit 1 -distinct
+ 
+ 
+ />-->
 
-<input URL="catalog:star.bnl.gov?production=P16id,trgsetupname=AuAu_200_production_low_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="all" />
+<input URL="catalog:star.bnl.gov?production=P16id,trgsetupname=AuAu_200_production_mid_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,runnumber[]15107005-15167014,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="all" /> 
+
+<!--<input URL="filelist:/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/Run2014LowMid.list" nFiles="all" />-->
         <stdout URL="file:./out/$JOBID.out" />
         <stderr URL="file:./err/$JOBID.err" />
                 
@@ -17,7 +24,7 @@ starver SL22c
 <!--root4star -b -l -q StRoot/macros/loadSharedHFLibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
 root4star -b -l -q RunPicoD0EventMaker.C\(\"$FILELIST\",\"Output_2014_${JOBINDEX}.root\",2014,false\) &gt;&amp; First_2014_${JOBINDEX}.log
 echo ${SCRATCH}/Output_2014_${JOBINDEX}.root.picoD0.root > TMPinput_2014_${JOBINDEX}.list
-root4star -b -l -q RunPicoD0AnaMaker.C\(\"TMPinput_2014_${JOBINDEX}.list\",\"$FILELIST\",\"D0_Output_2014_${JOBINDEX}.root\",2014,false\) &gt;&amp; Second_2014_${JOBINDEX}.log
+root4star -b -l -q RunPicoD0AnaMaker.C\(\"TMPinput_2014_${JOBINDEX}.list\",\"$FILELIST\",\"D0_Output_2014_mid_${JOBINDEX}.root\",2014,false\) &gt;&amp; Second_2014_mid_${JOBINDEX}.log
 
 <!--\"$FILELIST\" -->
 <!--tar -zcvf ${JOBID}.log.tgz ${JOBID}.log -->

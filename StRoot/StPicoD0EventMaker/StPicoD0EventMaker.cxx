@@ -94,9 +94,12 @@ Int_t StPicoD0EventMaker::Make(){
    //Set initial number of HFT tracks to 0
    unsigned int nHftTracks = 0;
 
+
+ // if( mPicoEvent->eventId()!=2804657) return kStOK; 
+//cout << mPicoEvent->eventId() << endl;
+
    //Check if the event is a good event
    if (isGoodEvent(mYear)){
-
       //Get number of tracks in event
       UInt_t nTracks = picoDst->numberOfTracks();
 
@@ -163,7 +166,6 @@ Int_t StPicoD0EventMaker::Make(){
 
             //Check if the D0 candidate is good for use in analysis
             if (isGoodMass(kaonPion)){
-
                 //Save D0 candidate in EvenetMaker.root.picoD0.root
                 mPicoD0Event->addKaonPion(&kaonPion);
             }
@@ -224,12 +226,28 @@ Int_t StPicoD0EventMaker::Make(){
 bool StPicoD0EventMaker::isGoodEvent(int mYear){
    //Check if good run and good event
 
-   return   isMinBiasTrigger(mYear) && //Check on trigger
-            sqrt(mPicoEvent->primaryVertex().x()*mPicoEvent->primaryVertex().x()+mPicoEvent->primaryVertex().y()*mPicoEvent->primaryVertex().y()) < cuts::vr && //Check on vertex radius
-            fabs(mPicoEvent->primaryVertex().z()) < cuts::vz && //Check on vertex z
-            fabs(mPicoEvent->primaryVertex().z() - mPicoEvent->vzVpd()) < cuts::vzVpdVz; //Check on vertex z - vzVpd
-
-   //It returns true if event is good
+	bool isGoodRun = true;
+	const std::set<int>* goodRunList = nullptr;
+	if (mYear == 2014){
+		int runIdLoad = mPicoEvent->runId();
+		goodRunList = &cuts::goodRun2014; 
+		isGoodRun = goodRunList->find(runIdLoad) != goodRunList->end();
+	}
+	
+	//Check on trigger
+	bool mbTriger = isMinBiasTrigger(mYear);
+	//Check on vertex radius
+	bool vertexRadius = sqrt(mPicoEvent->primaryVertex().x()*mPicoEvent->primaryVertex().x()+mPicoEvent->primaryVertex().y()*mPicoEvent->primaryVertex().y()) < cuts::vr;
+	//Check on vertex z
+	bool zPosition = fabs(mPicoEvent->primaryVertex().z()) < cuts::vz;
+	//Check on vertex z - vzVpd
+	bool vzVzVpd = fabs(mPicoEvent->primaryVertex().z() - mPicoEvent->vzVpd()) < cuts::vzVpdVz;
+	//Check on suspicious all-0 position
+	bool nonezeroVertex = (mPicoEvent->primaryVertex().x()!=0 && mPicoEvent->primaryVertex().y()!=0 && mPicoEvent->primaryVertex().z()!=0);
+	
+	//It returns true if event is good
+	return (mbTriger && vertexRadius && zPosition && vzVzVpd && nonezeroVertex && isGoodRun);
+   
 }
 
 bool StPicoD0EventMaker::isMinBiasTrigger(int mYear){

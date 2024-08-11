@@ -124,8 +124,9 @@ class StPicoD0AnaMaker : public StMaker
     bool isGoodTrack(StPicoTrack const*) const;
     bool isGoodJetTrack(StPicoTrack const*,StPicoEvent const*) const; //my
     bool isTpcPion(StPicoTrack const*) const;
-    bool isTpcKaon(StPicoTrack const*,StThreeVectorF const * pVtx) const;
+    bool isTpcKaon(StPicoTrack const*) const;
     bool isTofKaon(StPicoTrack const* const, float beta) const;
+    bool isTofPion(StPicoTrack const* const, float beta) const;
     float getTofBeta(StPicoTrack const*,StThreeVectorF const * pVtx,StPicoDst const* const picoDst) const;
     bool IsBadEnergyRun(int);
 
@@ -185,8 +186,9 @@ class StPicoD0AnaMaker : public StMaker
     TH1D* Jet_phi;
 
     //TNtuple D0-jets
-    Float_t TupleVariables[24];
+    Float_t TupleVariables[25];
     TNtuple* Jets;
+    TNtuple* EventStats;
     std::map<std::string, int> VariableJets;
 
     //2D D0 mass-pt like-sign and unlike-sign histograms

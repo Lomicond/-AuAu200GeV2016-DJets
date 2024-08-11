@@ -11,11 +11,19 @@ void loadSharedAnalysisLibraries()
 
   gROOT->LoadMacro("$STAR/StRoot/StMuDSTMaker/COMMON/macros/loadSharedLibraries.C");
   loadSharedLibraries();
+  /*
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjet");
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libsiscone");
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libsiscone_spherical"); 
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjetplugins");
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjettools");
+  */
+    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjet");
+    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libsiscone");
+    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libsiscone_spherical");
+    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjetplugins");
+    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjettools");
+    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjetcontribfragile");
   //gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjetcontribfragile"); 
 
   gSystem->Load("StPicoEvent");

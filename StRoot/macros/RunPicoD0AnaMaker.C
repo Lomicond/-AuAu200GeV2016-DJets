@@ -53,7 +53,7 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
       exit(0);
    }
 
-   int nEntries = 20000;
+   int nEntries = 10000000;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);
@@ -128,6 +128,9 @@ void RunPicoD0AnaMaker(string d0list="testD0.list", string pico="testPico.list",
   
    if(!Testing){
       nEntries = picoD0AnaMaker->getEntries();
+   }else
+   {
+   if (nEntries>picoD0AnaMaker->getEntries()) nEntries = picoD0AnaMaker->getEntries();
    }
 
    cout << "nEntries: " << nEntries << endl;
