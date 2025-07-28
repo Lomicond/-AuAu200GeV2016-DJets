@@ -21,6 +21,7 @@
 #include "StCuts.h"
 
 #include "StPicoD0EventMaker.h"
+#include "../StPicoD0AnaMaker/Calibration2016.h"
 
 ClassImp(StPicoD0EventMaker)
 
@@ -54,21 +55,38 @@ StPicoD0EventMaker::StPicoD0EventMaker(char const* makerName, StPicoDstMaker* pi
 StPicoD0EventMaker::~StPicoD0EventMaker(){
    /* mTree is owned by mOutputFile directory, it will be destructed once
     * the file is closed in ::Finish() */
-   delete mPicoD0Hists;
+    delete mPicoD0Event;
+    delete mPicoD0Hists;
 }
 
 Int_t StPicoD0EventMaker::Init(){
    return kStOK;
 }
-
+/*
 Int_t StPicoD0EventMaker::Finish(){
    //Saving all root files.
+   mPicoD0Hists->closeFile();
    mOutputFile->cd();
    mOutputFile->Write();
    mOutputFile->Close();
-   mPicoD0Hists->closeFile();
 
    return kStOK;
+}*/
+
+Int_t StPicoD0EventMaker::Finish() {
+    mPicoD0Hists->closeFile();
+    if (mOutputFile && mOutputFile->IsOpen()) {
+        mOutputFile->cd();
+        mOutputFile->Write();
+        mOutputFile->Close();
+        std::cout << "Output file written and closed successfully." << std::endl;
+    } else {
+        std::cerr << "Output file was not open or already closed." << std::endl;
+    }
+    
+    mOutputFile->Close(); delete mOutputFile;
+    
+    return kStOK;
 }
 
 void StPicoD0EventMaker::Clear(Option_t *opt){
@@ -95,8 +113,43 @@ Int_t StPicoD0EventMaker::Make(){
    unsigned int nHftTracks = 0;
 
 
- // if( mPicoEvent->eventId()!=2804657) return kStOK; 
+  //if( mPicoEvent->eventId()!=2804657) return kStOK;
 //cout << mPicoEvent->eventId() << endl;
+
+  bool isBadRun = false;
+  int runID = mPicoEvent->runId();
+  
+  //Is bad run
+  /*
+  if (mYear == 2016){
+	for (size_t i = 0; i < sizeof(EnergyBadRunList2016)/sizeof(int); ++i) {
+	    if (EnergyBadRunList2016[i] == runID) {
+		isBadRun = true;
+		break;
+	    }
+	}
+	for (size_t i = 0; i < sizeof(EnergyBadRunList2016)/sizeof(int); ++i) { //BUG
+	    if (BadRunListHFT2016[i] == runID) {
+		isBadRun = true;
+		break;
+	    }
+	}
+  }
+  */
+  /*
+  	const std::set<int>* badRunList = nullptr;
+	if (mYear == 2014){
+		int runIdLoad = mPicoEvent->runId();
+		badRunList = &cuts::AllBadRunList2014; 
+		isBadRun = badRunList->find(runIdLoad) != badRunList->end();
+	}*/
+  if (mYear == 2014 && cuts::AllBadRunList2014.count(runID)) {
+  isBadRun = true;
+  }
+        
+  if(isBadRun) return kStOK;
+
+
 
    //Check if the event is a good event
    if (isGoodEvent(mYear)){
@@ -227,19 +280,21 @@ bool StPicoD0EventMaker::isGoodEvent(int mYear){
    //Check if good run and good event
 
 	bool isGoodRun = true;
+	/*
 	const std::set<int>* goodRunList = nullptr;
 	if (mYear == 2014){
 		int runIdLoad = mPicoEvent->runId();
 		goodRunList = &cuts::goodRun2014; 
 		isGoodRun = goodRunList->find(runIdLoad) != goodRunList->end();
-	}
-	
+	}*/
+	double ShiftVz = 0;
+	if (mYear == 2014) ShiftVz = 0;//2.1486; //It could be used
 	//Check on trigger
 	bool mbTriger = isMinBiasTrigger(mYear);
 	//Check on vertex radius
 	bool vertexRadius = sqrt(mPicoEvent->primaryVertex().x()*mPicoEvent->primaryVertex().x()+mPicoEvent->primaryVertex().y()*mPicoEvent->primaryVertex().y()) < cuts::vr;
 	//Check on vertex z
-	bool zPosition = fabs(mPicoEvent->primaryVertex().z()) < cuts::vz;
+	bool zPosition = fabs(mPicoEvent->primaryVertex().z()-ShiftVz) < cuts::vz;
 	//Check on vertex z - vzVpd
 	bool vzVzVpd = fabs(mPicoEvent->primaryVertex().z() - mPicoEvent->vzVpd()) < cuts::vzVpdVz;
 	//Check on suspicious all-0 position
@@ -283,8 +338,16 @@ bool StPicoD0EventMaker::isGoodTrack(StPicoTrack const * const trk) const{
    if(mYear ==2014) HFTCondition = trk->isHFTTrack();
    //Bool_t isHFTTrack()const { return hasPxl1Hit() && hasPxl2Hit() && (hasIstHit() || hasSstHit()); }
 
+   //nHitsFit value
+   bool nHitsFitCondition = trk->nHitsFit() >= cuts::nHitsFit;
+   
+   //nHitsFit/nHitsMax (2014 not used, 2016 >= 0.52)
+   bool nHitsRatioCondition = true;
+   if(mYear ==2016) nHitsRatioCondition = (1.*trk->nHitsFit()/trk->nHitsMax() >= cuts::nHitsRatio2016);
+   if(mYear ==2014) nHitsRatioCondition = (1.*trk->nHitsFit()/trk->nHitsMax() >= cuts::nHitsRatio2014);
+   
    //In StCuts.h is defined if the HFT is required and the nHitsFit value
-   return (!cuts::requireHFT || HFTCondition) &&  trk->nHitsFit() >= cuts::nHitsFit;
+   return (!cuts::requireHFT || HFTCondition) &&  nHitsFitCondition && nHitsRatioCondition;
 
    //Function returns true if track is good
 }
@@ -292,7 +355,7 @@ bool StPicoD0EventMaker::isGoodTrack(StPicoTrack const * const trk) const{
 bool StPicoD0EventMaker::isPion(StPicoTrack const * const trk) const{
     //Check if track is pion
     //Parameters are saved in StCuts.h
-    return fabs(trk->nSigmaPion()) < cuts::nSigmaPion;
+    return (fabs(trk->nSigmaPion()) < cuts::nSigmaPion) && trk->gPt() > cuts::minPTdaugCut;
 
     //Function returns true if track is pion
 }
@@ -300,7 +363,7 @@ bool StPicoD0EventMaker::isPion(StPicoTrack const * const trk) const{
 bool StPicoD0EventMaker::isKaon(StPicoTrack const * const trk) const{
     //Check if track is kaon
     //Parameters are saved in StCuts.h
-    return fabs(trk->nSigmaKaon()) < cuts::nSigmaKaon;
+    return (fabs(trk->nSigmaKaon()) < cuts::nSigmaKaon) && trk->gPt() > cuts::minPTdaugCut;
 
     //Function returns true if track is kaon
 }

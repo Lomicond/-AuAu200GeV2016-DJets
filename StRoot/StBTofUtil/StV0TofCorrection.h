@@ -53,7 +53,7 @@
 #include "StPicoEvent/StPicoTrack.h"
 #include "StPicoEvent/StPicoEvent.h"
 #include "StPicoEvent/StPicoBTofPidTraits.h"
-
+  
 //------------
 //! template class defining an inline container 
 /*! used to store 3d-vectors and mother tracks */ 
@@ -126,7 +126,7 @@ class StV0TofCorrection {
 	"Make sure to call clearContainers() function"
 	"every time a correction of a particle is done!"
 	"Otherwise you're using the same container over and over again!";
-      Error("StV0TofCorrection::setVectors3D", err_msg);
+        ::Error("StV0TofCorrection::setVectors3D", err_msg); // added ::. Otherwise, there is a conflict with fastjet
     }
     Vectors3D->setNrArgs(0);
     Vectors3D->setPointer2Container(Vectors3D);
@@ -144,7 +144,7 @@ class StV0TofCorrection {
       return (*tracks)(tr);
     }
     else {
-      Error(
+      ::Error( // added ::. Otherwise, there is a conflict with fastjet
 	  "StV0TofCorrection::setMotherTracks",
 	  "Again: Don't forget clearContainers()!"
 	  );

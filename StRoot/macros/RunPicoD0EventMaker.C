@@ -57,7 +57,7 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
       exit(0);
    }
 
-   Int_t nEvents = 100000000;
+   Int_t nEvents = 100000;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);
@@ -70,7 +70,7 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
       cout << "\033[0;31mEnvironment Star Library does not match the requested library: \033[0m" << "\033[0;32m" << SL_version << "\033[0m";
       cout << "\033[0;31m for run: \033[0m" << "\033[0;32m" << pYear << "\033[0m";
       cout << "\033[0;31m in RunPicoTowerTest_short.C. Exiting...\033[0m" << endl;
-      exit(1);
+     // exit(1);
    }
 	
    gROOT->LoadMacro("$STAR/StRoot/StMuDSTMaker/COMMON/macros/loadSharedLibraries.C");
@@ -88,14 +88,14 @@ void RunPicoD0EventMaker(string pico="TestLists/testPico_2016.list",
 
 	if(!Testing){
       nEvents = picoDstMaker->chain()->GetEntries();
-   } else
+   } /*else
    {
    if (nEvents>picoDstMaker->chain()->GetEntries()) nEvents = picoDstMaker->chain()->GetEntries();
-   }
+   }*/
 
    cout << " Total entries = " << nEvents << endl;
    //-------------------------------------------
-   for (int iEvent = 0; iEvent <= nEvents; ++iEvent)
+   for (int iEvent = 0; iEvent < nEvents; ++iEvent)
    {
       chain->Clear();
       int iret = chain->Make();

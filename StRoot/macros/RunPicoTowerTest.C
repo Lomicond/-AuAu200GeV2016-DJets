@@ -31,8 +31,8 @@ void progres(double N, double D);
 
 
 
-void RunPicoTowerTest(string pico="TestLists/testPico_2016.list",
- string outFileName="Test_Tower.root",  int pYear = 2014, bool Testing = true)
+void RunPicoTowerTest(string pico="TestLists/testPico_2014.list",
+ string outFileName="Test_Tower.root",  int pYear = 2016, bool Testing = true)
 {
    //Check STAR Library. Please set SL_version to the original star library used in the production from http://www.star.bnl.gov/devcgi/dbProdOptionRetrv.pl
    string SL_version = "Unknown";
@@ -47,17 +47,19 @@ void RunPicoTowerTest(string pico="TestLists/testPico_2016.list",
       SL_version = "SL22c";
       Runcode = "Run14_AuAu200_VpdMB5";
       prodID = "P16id";
-   } 
+   } else if (pYear==2017){
+      SL_version = "SL22b";
+   }
    else {
       cout << "\033[0;31m Not valid year.\033[0m"<<endl;
       exit(0);
    }
 
-   Int_t nEntries = 1000;
+   Int_t nEntries = 100;
 
    if(Testing){
    pico=Form("TestLists/testPico_%.d.list",pYear);
-   outFileName=Form("Test_Tower_%.d",pYear);
+   outFileName=Form("Test_Tower_%.d.root",pYear);
    }
 
 

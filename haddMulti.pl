@@ -5,8 +5,8 @@ use File::Basename;
 use File::Copy;
 use Getopt::Std; 
 #use Switch;
-use threads;
-use threads::shared;
+#use threads;
+#use threads::shared;
 
 my ($rs,@files)=@ARGV;
 my $nparse=10;

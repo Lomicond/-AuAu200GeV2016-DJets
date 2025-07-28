@@ -86,6 +86,7 @@ class StPicoTowerTest : public StMaker
     StPicoTowerTest() {}
     void readNextEvent();
     ofstream fout;
+    StEmcPosition* mEmcPosition = nullptr;
 
     //-------------------------------------------
 
@@ -117,6 +118,10 @@ class StPicoTowerTest : public StMaker
     TH2D* MapTower_RunID_NHits_TowerID;
     TH2D* MapTower_RunID_Energy_TowerID;
     TH1D *MapTower_RunID_NEvents;
+    TH2D *hRunPxl1;
+    TH2D *hRunPxl2;
+    TH2D *hRunIst;
+    TH2D *hRunSsd;
 
 
     ClassDef(StPicoTowerTest, 1)

@@ -1,9 +1,20 @@
 <job minFilesPerProcess="10" maxFilesPerProcess="15" simulateSubmission="false" fileListSyntax="xrootd" >
 	
  <!--<stdout discard="true" />-->
-<!--<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,runnumber[]17062049-17179012,storage!=hpss,storage=local" preferStorage="local" singleCopy="true" nFiles="all" />-->
+<!--<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,storage!=hpss,storage=local" preferStorage="local" singleCopy="true" nFiles="all" />-->
+<!--,runnumber[]17062049-17179012
+<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_201,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,storage!=hpss,runnumber[]17164920-17179016" preferStorage="local" singleCopy="true" nFiles="all" /> 
+-->
 
-<input URL="catalog:star.bnl.gov?production=P16ij,trgsetupname=AuAu_200_production_2016,filename~st_physics,filetype=daq_reco_picoDst,library=SL20c,storage!=hpss,runnumber[]17164920-17179016" preferStorage="local" singleCopy="true" nFiles="all" /> 
+<!--<input URL="catalog:star.bnl.gov?production=P16id,(trgsetupname=AuAu_200_production_mid_2014||trgsetupname=AuAu_200_production_low_2014),filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,runnumber[]14350003-15337008,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="all" /> 2016_missing_runs.list-->
+<!--
+<input URL="catalog:star.bnl.gov?production=P16id,trgsetupname=AuAu_200_production_mid_2014||AuAu_200_production_low_2014,filename~st_physics,filetype=daq_reco_picoDst,library=SL22c,runnumber[]14350003-15337008,storage!=hpss" preferStorage="local" singleCopy="true" nFiles="all" />
+-->
+
+<input URL="filelist:/gpfs01/star/pwg/lomicond/Ondrej/Jets/D0_Jets/2016_missing_runs.list" nFiles="all" />
+
+
+<!--get_file_list.pl -keys path,filename -cond events'>100''&&'events'<120',runnumber=$run,filetype=online_daq,filename~st_zerobias_adc,storage=HPSS -limit 1 -delim '/' -distinct -->
 
         <stdout URL="file:./out/$JOBID.out" />
         <stderr URL="file:./err/$JOBID.err" />
@@ -17,13 +28,13 @@
 <command>
 starver SL20c
 <!--root4star -b -l -q StRoot/macros/loadSharedHFLcd ibraries.C StRoot/macros/loadSharedAnalysisLibraries.C -->
-root4star -b -l -q RunPicoTowerTest.C\(\"$FILELIST\",\"10_Tower_${JOBINDEX}.root\",2016,false\) &gt;&amp; 10_Tower_${JOBINDEX}.log
+root4star -b -l -q RunPicoTowerTest.C\(\"$FILELIST\",\"16_Tower_${JOBINDEX}.root\",2016,false\) &gt;&amp; 16_Tower_${JOBINDEX}.log
 
 </command>
 
 	<ResourceUsage>
 		<Memory>
-			<MinMemory>4000</MinMemory>
+			<MinMemory>8000</MinMemory>
 			<!-- <MaxMemory>2000</MaxMemory> -->
 		</Memory>
 	</ResourceUsage>

@@ -481,8 +481,8 @@ Bool_t findNeighborTowers(StPicoDst* mPicoDst, StEmcGeom *mEmcGeom, double eta, 
 //Find energy of neighboring towers - known position vector - obsolete
 //----------------------------------------------------------------------------- 
 
-Bool_t findNeighborTowers(StPicoDst* mPicoDst, StEmcGeom *mEmcGeom, TVector3 *position, int towerId, double *e1, double *e2/*, int *nextId1, int *nextId2*/)
-{
+//Bool_t findNeighborTowers(StPicoDst* mPicoDst, StEmcGeom *mEmcGeom, TVector3 *position, int towerId, double *e1, double *e2/*, int *nextId1, int *nextId2*/)
+/*{
 
 	 //mEmcGeom = StEmcGeom::getEmcGeom("bemc");
    //int towerId = 0;
@@ -550,13 +550,13 @@ Bool_t findNeighborTowers(StPicoDst* mPicoDst, StEmcGeom *mEmcGeom, TVector3 *po
 
 	return true;
 }   
-
+*/
 
 
 //----------------------------------------------------------------------------- 
 //Find energy and position of a cluster surrounding track-matched tower 
 //----------------------------------------------------------------------------- 
-
+/*
 Bool_t findRealCluster(StPicoDst *mPicoDst, StEmcGeom *mEmcGeom, TVector3 *position, int towerId, double *ecluster, double *etacluster, double *phicluster, array<int, 9> *ids)
 {
    int localTowerId = -1;
@@ -656,13 +656,13 @@ Bool_t findRealCluster(StPicoDst *mPicoDst, StEmcGeom *mEmcGeom, TVector3 *posit
 	eta.fill(0);
 	return true;
 }   
-
+*/
 
 
 //----------------------------------------------------------------------------- 
 //find if tower in a cluster has been matched before
 //----------------------------------------------------------------------------- 
-
+/*
 bool doesExist(const vector< array<int,9> >&  v, int item, int *cluster){
 
     for (unsigned int row = 0; row < v.size(); row++) {
@@ -682,12 +682,12 @@ bool doesExist(const vector< array<int,9> >&  v, int item, int *cluster){
 
     return false;
 }
-
+*/
 //----------------------------------------------------------------------------- 
 //find if matched tower is in a cluster
 //----------------------------------------------------------------------------- 
 
-
+/*
 bool doesExist(const vector< array<int,9> >&  v, int item){
 
     for (unsigned int row = 0; row < v.size(); row++) {
@@ -703,11 +703,11 @@ bool doesExist(const vector< array<int,9> >&  v, int item){
 
     return false;
 }
-
+*/
 //----------------------------------------------------------------------------- 
 //find if tower exists in multiple clusters and save the cluster IDs (-1) into clusters vector
 //----------------------------------------------------------------------------- 
-
+/*
 bool doesExistInMultiple(const vector< vector<int> >&  Clusters, int item, vector<unsigned int> *clusters){
 		bool found = false;
 		
@@ -726,7 +726,7 @@ bool doesExistInMultiple(const vector< vector<int> >&  Clusters, int item, vecto
     }
     return found;
 }
-
+*/
 //----------------------------------------------------------------------------- 
 //Match track to BEMC cluster - maybe impossible from PicoDst - missing StEmcCollection
 //----------------------------------------------------------------------------- 
@@ -835,7 +835,7 @@ Phi plane between the track and the closest cluster on the detector surface
 //_______________________________________________________________________________________________
 //Find 2X2 cluster - obsolete
 //_______________________________________________________________________________________________
-
+/*
 int findClusterId(int towerId)
 {
 	int Rows = 1200;
@@ -849,11 +849,11 @@ int findClusterId(int towerId)
 	}
 	return -1;
 }
-
+*/
 //_______________________________________________________________________________________________
 //Find 2X2 cluster - obsolete
 //_______________________________________________________________________________________________
-
+/*
 Bool_t findCluster(StPicoDst *mPicoDst, StEmcGeom *mEmcGeom, int towerId, double *ecluster, double *etacluster, double *phicluster)
 {
 		double energy = 0;
@@ -875,7 +875,9 @@ Bool_t findCluster(StPicoDst *mPicoDst, StEmcGeom *mEmcGeom, int towerId, double
 			bool bad = false;
 			for (int i = 0; i < nBadTowers; i++) 
 			{if (BadTowerArr[i] == towid) bad = true;}
-			if (bad) {/*cout << "found bad tower " << towid <<" , throw cluster " << cid << "  away" << endl;*/ return false;}
+			if (bad) {
+                //cout << "found bad tower " << towid <<" , throw cluster " << cid << "  away" << endl;
+                return false;}
 			mEmcGeom->getEta(towid, etaTemp);
       mEmcGeom->getPhi(towid, phiTemp);
 
@@ -912,3 +914,4 @@ Bool_t findCluster(StPicoDst *mPicoDst, StEmcGeom *mEmcGeom, int towerId, double
 	
 	return true;
 }
+*/

@@ -32,8 +32,8 @@ namespace PicoPrescalesConstants
 	450202,    // BHT2*VPDMB-30 (production_2014, production_mid_2014, production_low_2014)
 	450212,    // BHT2*VPDMB-30 (production_2014, production_mid_2014, production_low_2014)
 	450203,    // BHT3 (production_2014, production_mid_2014, production_low_2014)
-	450213,    // BHT3 (production_2014, production_mid_2014, production_low_2014)
-	
+	450213    // BHT3 (production_2014, production_mid_2014, production_low_2014)
+	/*
   520001,    // VPDMB-5-p-sst (production 1, physics stream)
   520011,    // VPDMB-5-p-sst 
   520021,    // VPDMB-5-p-sst
@@ -51,9 +51,11 @@ namespace PicoPrescalesConstants
   520003, 520013, 520023, 520033, 520043,                   // VPDMB-5
   520802, 520812, 520822, 520832, 520842,                   // VPDMB-5-p-hlt
   520002, 520012, 520022, 520032, 520042                    // VPDMB-5-p-nosst
+  */
   };
 
   std::vector<unsigned int> const triggerIdMtd = {
+  /*
   // st_mtd stream
   450601, // dimuon
   450611, // dimuon
@@ -73,6 +75,7 @@ namespace PicoPrescalesConstants
   450620,    // single-muon (production_2014, production_low_2014)
   450630,    // single-muon (production_mid_2014)
   450640     // single-muon (production_2014, production_low_2014)
+  */
   }; 
 }
 #endif

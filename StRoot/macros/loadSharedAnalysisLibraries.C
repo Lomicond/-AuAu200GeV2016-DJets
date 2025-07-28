@@ -18,14 +18,21 @@ void loadSharedAnalysisLibraries()
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjetplugins");
   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjettools");
   */
+  
     gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjet");
     gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libsiscone");
     gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libsiscone_spherical");
     gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjetplugins");
     gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjettools");
-    gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjetcontribfragile");
+   gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libfastjetcontribfragile");
   //gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/fastjet-install/lib/libfastjetcontribfragile"); 
-
+  
+  //
+   // gSystem->Load("/cvmfs/star.sdcc.bnl.gov/star-spack/spack/opt/spack/linux-rhel7-x86_64/gcc-4.8.5/fastjet-3.3.4-j5evuymea6juu4tkqxxim6nj3z6ldbg3/lib/libfastjet");
+  //  gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libsiscone");
+   // gSystem->Load("/gpfs01/star/pwg/lomicond/Ondrej/Jets/Alex_install/install/fastjet-install/lib/libsiscone_spherical");
+    //gSystem->Load("/cvmfs/star.sdcc.bnl.gov/star-spack/spack/opt/spack/linux-rhel7-x86_64/gcc-4.8.5/fastjet-3.3.4-j5evuymea6juu4tkqxxim6nj3z6ldbg3/lib/libfastjetplugins");
+   // gSystem->Load("/cvmfs/star.sdcc.bnl.gov/star-spack/spack/opt/spack/linux-rhel7-x86_64/gcc-4.8.5/fastjet-3.3.4-j5evuymea6juu4tkqxxim6nj3z6ldbg3/lib/libfastjettools");
   gSystem->Load("StPicoEvent");
   gSystem->Load("StPicoDstMaker");
   gSystem->Load("StRefMultCorr");
@@ -43,6 +50,7 @@ void loadSharedAnalysisLibraries()
  gSystem->Load("StPicoCutsBase");
   gSystem->Load("StBTofUtil");
   gSystem->Load("StPicoD0EventMaker");
+   // gSystem->Load("StPicoBackground");
   gSystem->Load("StPicoHFMaker");
   gSystem->Load("StPicoCuts");
   gSystem->Load("StTpcDb");
@@ -55,12 +63,9 @@ void loadSharedAnalysisLibraries()
   gSystem->Load("StDbBroker");
   gSystem->Load("libgeometry_Tables"); //rember, order of loading makers matters
   gSystem->Load("StPicoD0AnaMaker");
+  // gSystem->Load("StPicoBackground");
 
-
-	//PYTHIA6 libraries
-	gSystem->Load("libEG.so");
-	gSystem->Load("libEGPythia6.so");
-	gSystem->Load("libPythia6.so");	
+	
 
   cout << " loading of shared  libraries are done" << endl;
 }

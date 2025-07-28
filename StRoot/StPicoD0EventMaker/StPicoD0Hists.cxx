@@ -22,6 +22,12 @@ StPicoD0Hists::StPicoD0Hists(TString fileBaseName) : mPrescales(NULL), mOutFile(
 
   mOutFile = new TFile(Form("%s.picoD0.hists.root",fileBaseName.Data()),"RECREATE");
 
+  if (mOutFile->IsOpen()) {
+    std::cout << "Output file " << fileBaseName << ".root opened successfully." << std::endl;
+  } else {
+    std::cerr << "Failed to open output file " << fileBaseName << ".root." << std::endl;
+  }
+
   int nRuns = mPrescales->numberOfRuns();
   TH1::SetDefaultSumw2();
   mh1TotalEventsInRun = new TH1F("mh1TotalEventsInRun","totalEventsInRun;runIndex;totalEventsInRun",nRuns+1,0,nRuns+1);
@@ -41,7 +47,7 @@ StPicoD0Hists::StPicoD0Hists(TString fileBaseName) : mPrescales(NULL), mOutFile(
 StPicoD0Hists::~StPicoD0Hists()
 {
   delete mPrescales;
-  // note that histograms are owned by mOutFile. They will be destructed 
+  // note that histograms are owned by mOutFile. They will be destructed
   // when the file is closed.
 }
 //-----------------------------------------------------------------------
@@ -74,7 +80,8 @@ void StPicoD0Hists::addKaonPion(StKaonPion const* const kp, bool const fillMass,
   }
 }
 //---------------------------------------------------------------------
-void StPicoD0Hists::closeFile()
+/*void StPicoD0Hists::closeFile()
+
 {
   mOutFile->cd();
   mh1TotalEventsInRun->Write();
@@ -91,4 +98,26 @@ void StPicoD0Hists::closeFile()
   mh2InvariantMassVsPtUnlike->Write();
   mh2InvariantMassVsPtLike->Write();
   mOutFile->Close();
+}*/
+void StPicoD0Hists::closeFile() {
+  if (mOutFile->IsOpen()) {
+    mOutFile->cd();
+    mh1TotalEventsInRun->Write();
+    mh1TotalHftTracksInRun->Write();
+    mh1TotalGRefMultInRun->Write();
+    mh1TotalKaonsInRun->Write();
+    mh1TotalPionsInRun->Write();
+    mh1TotalD0CandidatesInRun->Write();
+    mh2NKaonsVsNPions->Write();
+    mh2KaonDcaVsPt->Write();
+    mh2PionDcaVsPt->Write();
+    mh2CosThetaVsPt->Write();
+    mh2DcaDaughtersVsPt->Write();
+    mh2InvariantMassVsPtUnlike->Write();
+    mh2InvariantMassVsPtLike->Write();
+    mOutFile->Close();
+    std::cout << "Histograms written and file closed successfully." << std::endl;
+  } else {
+    std::cerr << "Output file was not open." << std::endl;
+  }
 }

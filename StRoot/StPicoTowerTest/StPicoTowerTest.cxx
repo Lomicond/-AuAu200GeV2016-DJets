@@ -39,6 +39,8 @@
 #include "TFile.h"
 #include "StEvent/StDcaGeometry.h"
 //
+#include <bitset>
+
 #include <set>
 #include <vector>
 #include <stdio.h>
@@ -61,17 +63,35 @@ Int_t StPicoTowerTest::Init()
 {
 
   mPrescales = new StPicoPrescales(mycuts::prescalesFilesDirectoryName);
+  mEmcPosition = new StEmcPosition();
 
   std::string outputFile = "RunIndexTable.txt";
   mPrescales->createRunIndexFile(outputFile);
   mOutputFile = new TFile(mOutFileName.Data(), "RECREATE");
   mOutputFile->cd();
 
+//2016:
+//16337009
+//17315033
+
+//2017:
+//17319004
+//18317017
+
+//Int_t Run_min = 16337009;
+//Int_t Run_max = 17315034;
+//Int_t NOfRuns = Run_max-Run_min +1;
+
   int nRuns = mPrescales->numberOfRuns();
-  MapTower_RunID_NHits_TowerID = new TH2D("MapTower_RunID_NHits_TowerID","MapTower_RunID_NHits_TowerID;runIndex;towerID",nRuns+1,0,nRuns+1,4800,0,4800);
-  MapTower_RunID_Energy_TowerID = new TH2D("MapTower_RunID_Energy_TowerID","MapTower_RunID_Energy_TowerID;runIndex;towerID",nRuns+1,0,nRuns+1,4800,0,4800);
+  MapTower_RunID_NHits_TowerID = new TH2D("MapTower_RunID_NHits_TowerID","MapTower_RunID_NHits_TowerID;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
+  MapTower_RunID_Energy_TowerID = new TH2D("MapTower_RunID_Energy_TowerID","MapTower_RunID_Energy_TowerID;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
   MapTower_RunID_NEvents = new TH1D("MapTower_RunID_NEvents", "MapTower_RunID_NEvents", nRuns+1,0,nRuns+1); // 80 x 60 bins
   vtxr = new TH2D("vtxr",";PVtx.x() [cm]; PVtx.y() [cm]",100,-3,3,100,-3,3);
+ 
+  hRunPxl1 = new TH2D("hRunPxl1", "hRunPxl1", nRuns+1,0,nRuns+1,1500,0,1500);
+  hRunPxl2 = new TH2D("hRunPxl2", "hRunPxl2", nRuns+1,0,nRuns+1,1500,0,1500);
+  hRunIst = new TH2D("hRunIst", "hRunIst", nRuns+1,0,nRuns+1,1500,0,1500);
+  hRunSsd = new TH2D("hRunSsd", "hRunSsd", nRuns+1,0,nRuns+1,1500,0,1500);
 
 
  
@@ -102,23 +122,40 @@ StPicoTowerTest::~StPicoTowerTest()
 {
   /*  */
   delete mGRefMultCorrUtil;
+  delete mEmcPosition;
+
 }
 
 //-----------------------------------------------------------------------------
 Int_t StPicoTowerTest::Finish()
 {
   LOG_INFO << " StPicoTowerTest - writing data and closing output file " <<endm;
-  fout.close();
-  fout1.close();
+
   mOutputFile->cd();
 
   vtxr->Write();
   MapTower_RunID_NHits_TowerID->Write();
   MapTower_RunID_Energy_TowerID->Write();
   MapTower_RunID_NEvents->Write();
+  
+  hRunPxl1->Write();
+hRunPxl2->Write();
+hRunIst ->Write();
+hRunSsd ->Write(); 
 
   mOutputFile->Close();
   delete mPrescales;
+  delete mOutputFile;
+  mOutputFile = nullptr;
+delete vtxr;
+delete MapTower_RunID_NHits_TowerID;
+delete MapTower_RunID_Energy_TowerID;
+delete MapTower_RunID_NEvents;
+delete hRunPxl1;
+delete hRunPxl2;
+delete hRunIst;
+delete hRunSsd;
+
 
   return kStOK;
 }
@@ -142,7 +179,6 @@ Int_t StPicoTowerTest::Make()
     LOG_WARN << "StPicoTowerTest - No PicoDst! Skip! " << endm;
     return kStWarn;
   }
-
 
 
 
@@ -176,42 +212,90 @@ Int_t StPicoTowerTest::Make()
   MapTower_RunID_NEvents->Fill(runIndex);
 
 //cout << runIndex << picoDst->event()->runId() << endl;
-
-
+       ///   StEmcPosition* mEmcPosition = new StEmcPosition();
+      //loop over towers
       for (int iTow = 0; iTow < 4800; iTow++){ //get btow info
         
           StPicoBTowHit *towHit = picoDst->btowHit(iTow);
-          vector<int> ids = {0,0,0,0,0,0,0,0,0}; 
+          //vector<int> ids = {0,0,0,0,0,0,0,0,0}; 
           if (!towHit) continue; 
           //if (!towHit || towHit->isBad()) continue; //if the tower is bad or missing info
           int realtowID = towHit->numericIndex2SoftId(iTow);
 
-
-          StPicoBTowHit *tower = static_cast<StPicoBTowHit*>(picoDst->btowHit(iTow));
           Float_t pedestal, rms;
           Int_t status;
           mTables->getPedestal(BTOW, iTow+1, 0, pedestal, rms);
           mTables->getStatus(BTOW, iTow+1, status);  
           Double_t *TowerCoeff;
 
-          if(picoDst->event()->runId() <= 15094020) TowerCoeff = CPre;
-          else TowerCoeff = CLowMidHigh;
-  
-          StEmcGeom* mEmcGeom;
-          mEmcGeom = StEmcGeom::getEmcGeom("bemc");
-              
-          float Toweta_tmp = 0, Towphi = 0;
-          mEmcGeom->getEtaPhi(realtowID,Toweta_tmp,Towphi);
+           //Correct the eta of the tower for the vertex position
+           //Because the loaded eta is w.r.t. the center of the TPC, but the vertex do not have to be in the center
+           StThreeVectorF towerPosition = mEmcPosition->getPosFromVertex(StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z()), realtowID);
+           float Toweta = towerPosition.pseudoRapidity();
+          // float Towphi = towerPosition.phi();
 
-          float Toweta = vertexCorrectedEta(Toweta_tmp, event->primaryVertex().z());
-          double E_T = tower->energy()/cosh(Toweta);
+           double energy = towHit->energy();
+           
+           ///////////////////
+           
+           //Loading of the tower
+
+  //Tower coefficients for the different runs, parameters are saved in BemcNewCalib.h
+  if(picoDst->event()->runId() <= 15094020) TowerCoeff = CPre;
+  else TowerCoeff = CLowMidHigh;
+
+  //Calculation of the calibrated energy E=C*(ADC-Pedestal)
+  Double_t calibEnergy = TowerCoeff[realtowID-1]*(towHit->adc() - pedestal); //softID
+
+           
+           energy = calibEnergy;
+           
+           ///////////////////
+
+          double E_T = energy/cosh(Toweta);           
           // cout << "E_T: " << E_T << endl;
+         ///// if(iTow==69||iTow==169||iTow==669) E_T = 999999999;
           if(E_T>0.2){
              MapTower_RunID_NHits_TowerID->Fill(runIndex,iTow);
-             MapTower_RunID_Energy_TowerID->Fill(runIndex, iTow, tower->energy());
+             MapTower_RunID_Energy_TowerID->Fill(runIndex, iTow, energy);
           }
   
       }
+int pxl1 = 0;//(map >> 0) & 0x1;       // bit 0
+int pxl2 = 0;//(map >> 1) & 0x3;       // bits 1–2
+int ist  = 0;//(map >> 3) & 0x3;       // bits 3–4
+int ssd  = 0;//(map >> 5) & 0x3;       // bits 5–6
+    //HFT
+      UInt_t nTracks = picoDst->numberOfTracks();
+    for (unsigned short iTrack = 0; iTrack < nTracks; ++iTrack){
+    
+    
+            //The i-th track is loaded
+            StPicoTrack* trk = picoDst->track(iTrack);
+
+            //Check if the track exists
+            if(!trk) continue;
+            
+            
+    	UInt_t map = trk->hftHitsMap();
+
+pxl1 += (map >> 0) & 0x1;       // bit 0
+pxl2 += (map >> 1) & 0x3;       // bits 1–2
+ist  += (map >> 3) & 0x3;       // bits 3–4
+ssd  += (map >> 5) & 0x3;       // bits 5–6
+
+
+    }  
+ //  std::vector<std::bitset<4800>> goodTowerMap(2989);
+hRunPxl1->Fill(runIndex, pxl1);
+hRunPxl2->Fill(runIndex, pxl2);
+hRunIst ->Fill(runIndex, ist);
+hRunSsd ->Fill(runIndex, ssd);   
+
+pxl1 = 0;
+pxl2 = 0;
+ist = 0;
+ssd = 0;
 
   return kStOK;
 }
@@ -265,9 +349,35 @@ bool StPicoTowerTest::isMBTrigger(int mYear)
 
   if(mYear ==2014){  
       static const std::set<int> mbTriggers2014 = {
-      450050, 450060, 450005, 450015, 450025
+      450050, //VPDMB-5-p-nobsmd-hlt
+      450060, //VPDMB-5-p-nobsmd-hlt
+      450005, 
+      450015, 
+      450025,
+      450201, //BHT1*VPDMB-30
+      450202, //BHT2*VPDMB-30
+      450203, //BHT3
+      450014, //VPDMB-5-nobsmd
+      450009, //VPDMB-5-p-nobsmd-ssd-hlt
       };
       mbTriggers = &mbTriggers2014;
+  }
+  
+  if(mYear ==2017){  
+      static const std::set<int> mbTriggers2017 = {
+      570214, //BHT1*VPD30 
+      570204, //BHT1*VPD100
+      570205, 570215, //BHT2*BBCMB
+      570201, //BHT3
+      570001, //VPDMB-30
+      570404, //JP0*VPDMB30
+      570403, //JP1*VPDMB30
+      570401, //JP2
+      570402, //JP2*L2JetHigh
+      570205, //BHT2*BBCMB
+      570215, //BHT2*BBCMB
+      };
+      mbTriggers = &mbTriggers2017;
   }
 
     StPicoEvent* event = static_cast<StPicoEvent*>(picoDst->event());
