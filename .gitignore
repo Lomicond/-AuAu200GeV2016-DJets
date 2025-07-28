@@ -18,3 +18,5 @@ LocalLibraries.zip
 *.dataset
 *.session.*
 *.py
+*.tmp
+*LowMid*.list
