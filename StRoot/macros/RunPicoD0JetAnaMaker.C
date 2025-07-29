@@ -94,6 +94,7 @@ void RunPicoD0JetAnaMaker(string pico="testPico.list",
    picoD0JetAnaMaker->setNJetsRemove(1);
    picoD0JetAnaMaker->setGhostMaxrap(1.0);
    picoD0JetAnaMaker->setMaxNeutralFraction(0.95);
+   picoD0JetAnaMaker->setBgSubtraction(2); //0 - Area based, 1 - ICS, 2 - jet shape
 
    chain->Init();
   

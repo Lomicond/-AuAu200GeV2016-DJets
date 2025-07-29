@@ -102,6 +102,7 @@ class StPicoD0JetAnaMaker : public StMaker
     void setMaxDcaZHadronCorr(Float_t max);
     Int_t getEntries() const;
     void setHadronCorr(Float_t corr);
+    void setBgSubtraction(Int_t a);
     void setOnlyTrackBasedJets(Bool_t onlyTrackBasedJets);
     void setCutETmin(Float_t min);
     void setGhostMaxrap(Float_t fGhostMaxrap);
@@ -133,6 +134,7 @@ class StPicoD0JetAnaMaker : public StMaker
     Bool_t IsBadEnergyRun(Int_t);
     #ifndef __CINT__
     std::vector<fastjet::PseudoJet> JetReconstructionICS(std::vector<fastjet::PseudoJet> fInputVectors, Int_t fCentrality, Double_t fR, Bool_t fBackSub, Double_t fEP_psi2, Int_t difiter);
+    std::vector<fastjet::PseudoJet> JetReconstructionShape(std::vector<fastjet::PseudoJet> fInputVectors, Int_t fCentrality, Double_t fR, Bool_t fBackSub, Double_t fEP_psi2, Int_t difiter);
     fastjet::ClusterSequenceArea* fClustSeq = nullptr;
     #endif
     Float_t fGhostMaxrap;
@@ -140,6 +142,7 @@ class StPicoD0JetAnaMaker : public StMaker
     Float_t maxneutralfrac;
     Float_t fETmincut;
     Float_t fHadronCorr;
+    Float_t fBgSubtraction;
     Float_t OnlyTrackBasedJets;
     Float_t maxdcazhadroncorr;
     const Double_t mBarrelRadius = 225.405;
@@ -154,7 +157,14 @@ Int_t centrality;
 Float_t weightCentrality;
 Int_t gRefMult;
 Float_t backgroundDensity;
+Float_t backgroundDensityM;
 Float_t psi2;
+Float_t fAngul10half;
+Float_t	fAngul11;
+Float_t	fAngul11half;
+Float_t	fAngul12;
+Float_t	fAngul13;
+Float_t	fAngulDisp;
 
 //D0 meson
 Int_t d0PdgSign;
@@ -279,6 +289,11 @@ inline void StPicoD0JetAnaMaker::setMaxNeutralFraction(Float_t max) {
 
 inline void StPicoD0JetAnaMaker::setHadronCorr(Float_t corr) {
     fHadronCorr = corr;
+}
+
+inline void StPicoD0JetAnaMaker::setBgSubtraction(Int_t a){
+  //0 - Area based, 1 - ICS, 2 - jet shape
+  fBgSubtraction = a;
 }
 
 inline void StPicoD0JetAnaMaker::setOnlyTrackBasedJets(Bool_t OTBJets) {
